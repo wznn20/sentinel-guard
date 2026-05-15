@@ -1,0 +1,50 @@
+# ============================================================
+# Sentinel — Docker Compose 快速部署
+# ============================================================
+
+version: "3.8"
+
+services:
+  sentinel:
+    image: nousresearch/sentinel:latest
+    container_name: sentinel
+    restart: unless-stopped
+
+    # 网络模式:
+    #   host: 流量分析需要抓包 (推荐)
+    #   bridge: 不需要流量分析时
+    network_mode: host
+
+    volumes:
+      # 配置文件
+      - ~/.sentinel/config:/home/sentinel/.sentinel/config
+      # 证据存储
+      - ~/.sentinel/evidence:/home/sentinel/.sentinel/evidence
+      # 日志目录 (可选)
+      - ~/.sentinel/logs:/home/sentinel/.sentinel/logs
+      # 只读访问系统日志 (日志分析)
+      - /var/log:/var/log:ro
+
+    environment:
+      # LLM API Key
+      - SENTINEL_LLM_KEY=${SENTINEL_LLM_KEY}
+      # 可选: 威胁情报 API Key
+      - ABUSEIPDB_KEY=${ABUSEIPDB_KEY:-}
+      - VIRUSTOTAL_KEY=${VIRUSTOTAL_KEY:-}
+      # 环境
+      - TZ=Asia/Shanghai
+
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "sentinel", "status", "--json"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

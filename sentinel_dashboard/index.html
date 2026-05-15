@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentinel — 安全态势感知平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg-root: #010102;
+  --bg-surface: #0a0a0f;
+  --bg-elevated: #12121a;
+  --accent-primary: #3b82f6;
+  --accent-primary-dim: rgba(59,130,246,0.12);
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #475569;
+  --border-subtle: #1e293b;
+  --glass-bg: rgba(255,255,255,0.03);
+  --glass-border: rgba(255,255,255,0.06);
+  --glass-blur: 12px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --sidebar-width: 232px;
+  --topnav-height: 52px;
+  --statusbar-height: 32px;
+  --font-mono: 'SF Mono', 'Cascadia Code', 'JetBrains Mono', monospace;
+}
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg-root);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: var(--statusbar-height);
+  width: var(--sidebar-width);
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  user-select: none;
+}
+
+.sidebar-brand {
+  height: var(--topnav-height);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  gap: 10px;
+}
+
+.sidebar-brand svg { flex-shrink: 0; }
+
+.sidebar-brand span {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  text-decoration: none;
+  letter-spacing: 0.01em;
+}
+
+.nav-item:hover {
+  background: rgba(255,255,255,0.04);
+  color: var(--text-primary);
+}
+
+.nav-item.active {
+  background: rgba(255,255,255,0.06);
+  color: var(--text-primary);
+}
+
+.nav-item svg { flex-shrink: 0; opacity: 0.55; }
+.nav-item.active svg { opacity: 0.9; }
+.nav-item:hover svg { opacity: 0.8; }
+
+.nav-section {
+  margin-top: 18px;
+  margin-bottom: 4px;
+  padding: 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.sidebar-footer {
+  padding: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.sidebar-footer .nav-item { font-size: 12.5px; }
+
+/* ── Top Navigation ── */
+.topnav {
+  position: fixed;
+  top: 0;
+  left: var(--sidebar-width);
+  right: 0;
+  height: var(--topnav-height);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  z-index: 90;
+}
+
+.topnav-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.breadcrumb {
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.breadcrumb .current {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.breadcrumb .sep {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: rgba(34,197,94,0.10);
+  color: #22c55e;
+  border: 1px solid rgba(34,197,94,0.18);
+}
+
+.status-pill .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34,197,94,0.5);
+  animation: pulse-dot 2s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.topnav-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.time-display {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ── Main Content ── */
+.main {
+  position: fixed;
+  top: var(--topnav-height);
+  left: var(--sidebar-width);
+  right: 0;
+  bottom: var(--statusbar-height);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Glass Panel ── */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+.glass-panel.sm { padding: 16px; }
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.panel-header h3 {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.01em;
+}
+
+.panel-header .badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.04);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.panel-header .pill {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 100px;
+  background: rgba(239,68,68,0.10);
+  color: #ef4444;
+  border: 1px solid rgba(239,68,68,0.15);
+}
+
+/* ── Grids ── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+.grid-2-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+.grid-1-2 { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; }
+
+/* ── Security Score Card ── */
+.score-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  position: relative;
+  overflow: hidden;
+}
+
+.score-ring {
+  position: relative;
+  width: 130px;
+  height: 130px;
+  margin-bottom: 16px;
+}
+
+.score-ring svg {
+  transform: rotate(-90deg);
+}
+
+.score-value {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.score-value .number {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.score-value .label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.score-meta {
+  display: flex;
+  gap: 28px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.score-meta span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.score-meta .up { color: #22c55e; }
+.score-meta .down { color: #ef4444; }
+
+/* ── Mini Chart ── */
+.chart-wrap {
+  height: 120px;
+  position: relative;
+}
+
+.chart-wrap canvas { width: 100% !important; height: 100% !important; }
+
+/* ── Events / Alerts List ── */
+.event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.event-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: color 0.15s;
+}
+
+.event-row:last-child { border-bottom: none; }
+
+.event-row:hover { color: var(--text-primary); }
+
+.event-row .time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  width: 50px;
+  flex-shrink: 0;
+}
+
+.event-row .source {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  width: 100px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-row .desc {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-row .sev {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.sev-critical { background: rgba(239,68,68,0.12); color: #ef4444; }
+.sev-high { background: rgba(249,115,22,0.12); color: #f97316; }
+.sev-medium { background: rgba(234,179,8,0.12); color: #eab308; }
+.sev-low { background: rgba(34,197,94,0.10); color: #22c55e; }
+
+/* ── Asset Grid ── */
+.asset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.asset-card {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.2s;
+}
+
+.asset-card:hover { border-color: rgba(255,255,255,0.08); }
+
+.asset-card .name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.asset-card .ip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.asset-card .status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.asset-card .health {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.asset-card .health-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+
+.asset-card .health-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+.health-ok { color: #22c55e; }
+.health-ok .health-bar-fill { background: #22c55e; }
+
+.health-warn { color: #eab308; }
+.health-warn .health-bar-fill { background: #eab308; }
+
+.health-err { color: #ef4444; }
+.health-err .health-bar-fill { background: #ef4444; }
+
+/* ── Top5 Attack Sources ── */
+.top5-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.top5-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  font-size: 13px;
+}
+
+.top5-row:last-child { border-bottom: none; }
+
+.top5-row .rank {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  width: 20px;
+  flex-shrink: 0;
+}
+
+.top5-row .rank.r1 { color: #ef4444; }
+.top5-row .rank.r2 { color: #f97316; }
+.top5-row .rank.r3 { color: #eab308; }
+
+.top5-row .ip-addr {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.top5-row .count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.top5-row .bar-wrap {
+  width: 80px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+
+.top5-row .bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent-primary-dim);
+}
+
+/* ── Status Bar ── */
+.statusbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--statusbar-height);
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px 0 calc(var(--sidebar-width) + 16px);
+  font-size: 11px;
+  color: var(--text-muted);
+  z-index: 100;
+  font-family: var(--font-mono);
+}
+
+.statusbar-section {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.status-indicator { color: #22c55e; }
+
+/* ── Scrollbar ── */
+.main::-webkit-scrollbar { width: 5px; }
+.main::-webkit-scrollbar-track { background: transparent; }
+.main::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 10px; }
+.main::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.10); }
+
+/* ── Responsive tweaks (keep functional above 1200px) ── */
+@media (max-width: 1400px) {
+  .grid-2, .grid-3, .grid-2-1, .grid-1-2 { gap: 14px; }
+  .main { padding: 18px; gap: 14px; }
+}
+
+/* ── Keyline accent (used sparingly) ── */
+.accent-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--accent-primary);
+  box-shadow: 0 0 8px rgba(59,130,246,0.4);
+  display: inline-block;
+}
+
+.cta-text {
+  color: var(--accent-primary);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.cta-text:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      <path d="M9 12l2 2 4-4"/>
+    </svg>
+    <span>Sentinel</span>
+  </div>
+
+  <nav class="sidebar-nav">
+    <a class="nav-item active" data-nav="overview">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      总览
+    </a>
+    <a class="nav-item" data-nav="alerts">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      告警中心
+    </a>
+    <a class="nav-item" data-nav="traffic">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      流量分析
+    </a>
+    <a class="nav-item" data-nav="logs">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      日志分析
+    </a>
+    <a class="nav-item" data-nav="assets">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      资产管理
+    </a>
+
+    <div class="nav-section">调查</div>
+
+    <a class="nav-item" data-nav="evidence">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      证据库
+    </a>
+    <a class="nav-item" data-nav="threats">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      威胁情报
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    <a class="nav-item" data-nav="settings">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      设置
+    </a>
+  </div>
+</aside>
+
+<!-- Top Navigation -->
+<header class="topnav">
+  <div class="topnav-left">
+    <div class="breadcrumb">
+      <span class="current">态势总览</span>
+    </div>
+    <div class="status-pill">
+      <span class="dot"></span>
+      系统正常
+    </div>
+  </div>
+  <div class="topnav-right">
+    <span>数据刷新间隔: 30s</span>
+    <span class="time-display" id="clock">--</span>
+  </div>
+</header>
+
+<!-- Main Content -->
+<main class="main">
+
+  <!-- Row 1: Score + Chart + Top5 -->
+  <div class="grid-3">
+    <!-- Security Score -->
+    <div class="glass-panel score-card">
+      <div class="panel-header" style="width:100%;margin-bottom:0;">
+        <h3>安全评分</h3>
+        <span class="badge">今日</span>
+      </div>
+      <div class="score-ring">
+        <svg width="130" height="130" viewBox="0 0 130 130">
+          <circle cx="65" cy="65" r="56" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="6"/>
+          <circle cx="65" cy="65" r="56" fill="none" stroke="#3b82f6" stroke-width="6" stroke-linecap="round"
+            stroke-dasharray="351.86" stroke-dashoffset="56.3" opacity="0.9"/>
+        </svg>
+        <div class="score-value">
+          <span class="number">84</span>
+          <span class="label">/ 100</span>
+        </div>
+      </div>
+      <div class="score-meta">
+        <span class="up">▲ 3</span>
+        <span>较昨日</span>
+        <span style="color:var(--text-muted);">|</span>
+        <span>评级: <span style="color:#22c55e;font-weight:600;">B+</span></span>
+      </div>
+    </div>
+
+    <!-- 24h Alert Trend -->
+    <div class="glass-panel">
+      <div class="panel-header">
+        <h3>24h 告警趋势</h3>
+        <span class="badge">847 条</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="alertChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Attack Source Top5 -->
+    <div class="glass-panel">
+      <div class="panel-header">
+        <h3>攻击源 TOP5</h3>
+        <span class="pill" style="background:rgba(239,68,68,0.08);">高危</span>
+      </div>
+      <div class="top5-list">
+        <div class="top5-row"><span class="rank r1">01</span><span class="ip-addr">185.220.101.42</span><span class="bar-wrap"><span class="bar-fill" style="width:92%"></span></span><span class="count">3,421</span></div>
+        <div class="top5-row"><span class="rank r2">02</span><span class="ip-addr">45.33.32.156</span><span class="bar-wrap"><span class="bar-fill" style="width:76%"></span></span><span class="count">2,847</span></div>
+        <div class="top5-row"><span class="rank r3">03</span><span class="ip-addr">91.121.87.93</span><span class="bar-wrap"><span class="bar-fill" style="width:63%"></span></span><span class="count">2,310</span></div>
+        <div class="top5-row"><span class="rank">04</span><span class="ip-addr">103.224.182.251</span><span class="bar-wrap"><span class="bar-fill" style="width:48%"></span></span><span class="count">1,792</span></div>
+        <div class="top5-row"><span class="rank">05</span><span class="ip-addr">198.58.118.70</span><span class="bar-wrap"><span class="bar-fill" style="width:35%"></span></span><span class="count">1,304</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 2: Traffic Anomalies + Asset Health -->
+  <div class="grid-2-1">
+    <!-- Traffic Anomaly Events -->
+    <div class="glass-panel">
+      <div class="panel-header">
+        <h3>流量异常事件</h3>
+        <a class="cta-text" href="#">查看全部 →</a>
+      </div>
+      <div class="event-list">
+        <div class="event-row">
+          <span class="time">14:32:17</span>
+          <span class="source">IDS-03</span>
+          <span class="desc">出站流量突增 — 疑似数据外泄</span>
+          <span class="sev sev-critical">严重</span>
+        </div>
+        <div class="event-row">
+          <span class="time">14:18:05</span>
+          <span class="source">FW-PROD</span>
+          <span class="desc">SSH 暴力破解 — 连续失败登录 47 次</span>
+          <span class="sev sev-high">高危</span>
+        </div>
+        <div class="event-row">
+          <span class="time">13:55:41</span>
+          <span class="source">WAF-01</span>
+          <span class="desc">SQL 注入探测 — /api/users 端点</span>
+          <span class="sev sev-high">高危</span>
+        </div>
+        <div class="event-row">
+          <span class="time">13:40:22</span>
+          <span class="source">DNS-MON</span>
+          <span class="desc">DNS 隧道通信 — 异常 TXT 记录查询</span>
+          <span class="sev sev-medium">中危</span>
+        </div>
+        <div class="event-row">
+          <span class="time">13:12:58</span>
+          <span class="source">LB-EDGE</span>
+          <span class="desc">HTTP 请求速率异常 — 疑似 DDoS</span>
+          <span class="sev sev-critical">严重</span>
+        </div>
+        <div class="event-row">
+          <span class="time">12:47:33</span>
+          <span class="source">HIDS-07</span>
+          <span class="desc">主机文件完整性告警 — /etc/shadow</span>
+          <span class="sev sev-medium">中危</span>
+        </div>
+        <div class="event-row">
+          <span class="time">12:20:10</span>
+          <span class="source">FW-PROD</span>
+          <span class="desc">端口扫描 — 目标 10.0.4.0/24</span>
+          <span class="sev sev-low">低危</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Asset Health Grid -->
+    <div class="glass-panel">
+      <div class="panel-header">
+        <h3>资产健康</h3>
+        <span class="badge">12 台在线</span>
+      </div>
+      <div class="asset-grid">
+        <div class="asset-card">
+          <span class="name">API Gateway</span>
+          <span class="ip">10.0.1.14</span>
+          <div class="status-row">
+            <span class="health health-ok">正常</span>
+            <span class="health-bar health-ok"><span class="health-bar-fill" style="width:99.7%"></span></span>
+            <span style="font-size:11px;color:var(--text-muted)">99.7%</span>
+          </div>
+        </div>
+        <div class="asset-card">
+          <span class="name">PostgreSQL 主库</span>
+          <span class="ip">10.0.2.7</span>
+          <div class="status-row">
+            <span class="health health-ok">正常</span>
+            <span class="health-bar health-ok"><span class="health-bar-fill" style="width:99.9%"></span></span>
+            <span style="font-size:11px;color:var(--text-muted)">99.9%</span>
+          </div>
+        </div>
+        <div class="asset-card">
+          <span class="name">Redis 缓存集群</span>
+          <span class="ip">10.0.3.22</span>
+          <div class="status-row">
+            <span class="health health-warn">警告</span>
+            <span class="health-bar health-warn"><span class="health-bar-fill" style="width:87.3%"></span></span>
+            <span style="font-size:11px;color:var(--text-muted)">87.3%</span>
+          </div>
+        </div>
+        <div class="asset-card">
+          <span class="name">Nginx 边缘节点</span>
+          <span class="ip">10.0.1.8</span>
+          <div class="status-row">
+            <span class="health health-ok">正常</span>
+            <span class="health-bar health-ok"><span class="health-bar-fill" style="width:99.2%"></span></span>
+            <span style="font-size:11px;color:var(--text-muted)">99.2%</span>
+          </div>
+        </div>
+        <div class="asset-card">
+          <span class="name">Elasticsearch</span>
+          <span class="ip">10.0.4.9</span>
+          <div class="status-row">
+            <span class="health health-err">异常</span>
+            <span class="health-bar health-err"><span class="health-bar-fill" style="width:64.1%"></span></span>
+            <span style="font-size:11px;color:var(--text-muted)">64.1%</span>
+          </div>
+        </div>
+        <div class="asset-card">
+          <span class="name">K8s 控制平面</span>
+          <span class="ip">10.0.5.3</span>
+          <div class="status-row">
+            <span class="health health-ok">正常</span>
+            <span class="health-bar health-ok"><span class="health-bar-fill" style="width:99.5%"></span></span>
+            <span style="font-size:11px;color:var(--text-muted)">99.5%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 3: Latest High-Priority Alerts -->
+  <div class="glass-panel">
+    <div class="panel-header">
+      <h3>最新高危告警</h3>
+      <div style="display:flex;gap:12px;align-items:center;">
+        <span class="pill">5 条未处置</span>
+        <a class="cta-text" href="#">告警中心 →</a>
+      </div>
+    </div>
+    <div class="event-list">
+      <div class="event-row">
+        <span class="time">14:32:17</span>
+        <span class="source">IDS-03</span>
+        <span class="desc">异常出站连接: 10.0.1.14 → 185.220.101.42:8443 — TLS 加密流量特征匹配 C2 通信模式</span>
+        <span class="sev sev-critical">严重</span>
+      </div>
+      <div class="event-row">
+        <span class="time">14:18:05</span>
+        <span class="source">FW-PROD</span>
+        <span class="desc">SSH 暴力破解攻击: 45.33.32.156 对生产跳板机连续尝试登录 47 次，触发速率限制</span>
+        <span class="sev sev-high">高危</span>
+      </div>
+      <div class="event-row">
+        <span class="time">13:55:41</span>
+        <span class="source">WAF-01</span>
+        <span class="desc">SQL 注入攻击: /api/users?id= 参数检测到 UNION SELECT 注入载荷，已由 WAF 拦截</span>
+        <span class="sev sev-high">高危</span>
+      </div>
+      <div class="event-row">
+        <span class="time">13:12:58</span>
+        <span class="source">LB-EDGE</span>
+        <span class="desc">应用层 DDoS: HTTP GET /search 端点请求速率 8,400 req/s，超出基线 12 倍，已启用限流</span>
+        <span class="sev sev-critical">严重</span>
+      </div>
+      <div class="event-row">
+        <span class="time">11:08:29</span>
+        <span class="source">HIDS-07</span>
+        <span class="desc">权限提升检测: 非特权用户执行 sudo 操作修改 /etc/passwd，疑似横向移动</span>
+        <span class="sev sev-high">高危</span>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Status Bar -->
+<footer class="statusbar">
+  <div class="statusbar-section">
+    <span><span class="status-indicator">●</span> Sentinel v3.2.1</span>
+    <span>节点: 上海-01</span>
+    <span>上行: 1.2 Gbps</span>
+    <span>下行: 847 Mbps</span>
+  </div>
+  <div class="statusbar-section">
+    <span>事件吞吐: 3,420 eps</span>
+    <span>延迟: 12ms</span>
+    <span>运行时间: 47d 3h</span>
+  </div>
+</footer>
+
+<script>
+(function() {
+  // ── Clock ──
+  function updateClock() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    const s = String(now.getSeconds()).padStart(2,'0');
+    document.getElementById('clock').textContent = h + ':' + m + ':' + s + ' CST';
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // ── Sidebar Navigation ──
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', function(e) {
+      e.preventDefault();
+      document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+      this.classList.add('active');
+      const nav = this.dataset.nav;
+      if (nav === 'overview') {
+        document.querySelector('.breadcrumb .current').textContent = '态势总览';
+      } else {
+        const label = this.textContent.trim();
+        document.querySelector('.breadcrumb .current').textContent = label;
+      }
+    });
+  });
+
+  // ── 24h Alert Trend Chart ──
+  const ctx = document.getElementById('alertChart').getContext('2d');
+
+  const gradient = ctx.createLinearGradient(0, 0, 0, 120);
+  gradient.addColorStop(0, 'rgba(59,130,246,0.18)');
+  gradient.addColorStop(1, 'rgba(59,130,246,0.0)');
+
+  const hours = ['00:00','02:00','04:00','06:00','08:00','10:00','12:00','14:00','16:00','18:00','20:00','22:00','24:00'];
+  const data = [18,12,9,7,14,31,48,62,58,71,55,43,28];
+
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: hours,
+      datasets: [{
+        data: data,
+        borderColor: '#3b82f6',
+        borderWidth: 1.5,
+        tension: 0.4,
+        fill: true,
+        backgroundColor: gradient,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        pointHoverBackgroundColor: '#3b82f6',
+        pointHoverBorderColor: '#010102',
+        pointHoverBorderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 800, easing: 'easeOutQuart' },
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#12121a',
+          titleColor: '#f1f5f9',
+          bodyColor: '#94a3b8',
+          borderColor: 'rgba(255,255,255,0.08)',
+          borderWidth: 1,
+          cornerRadius: 6,
+          padding: 10,
+          displayColors: false,
+          callbacks: {
+            label: function(ctx) { return ctx.parsed.y + ' 条告警'; }
+          }
+        }
+      },
+      scales: {
+        x: {
+          display: true,
+          ticks: {
+            color: '#475569',
+            font: { size: 10, family: 'Inter' },
+            maxTicksLimit: 7,
+            padding: 4,
+          },
+          grid: { display: false },
+          border: { display: false },
+        },
+        y: {
+          display: false,
+          min: 0,
+          max: 90,
+        }
+      }
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
