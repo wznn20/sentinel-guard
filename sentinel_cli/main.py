@@ -133,7 +133,7 @@ def start_monitor(log_sources: list):
 # ── CLI ──
 
 @click.group()
-@click.version_option(version="0.2.0", prog_name="sentinel")
+@click.version_option(version="0.3.0", prog_name="sentinel")
 def cli():
     """Sentinel — AI 网络安全智能体"""
     pass
@@ -141,52 +141,9 @@ def cli():
 
 @cli.command()
 def setup():
-    """运行交互式配置向导"""
-    click.echo("""
-╔══════════════════════════════════════╗
-║     Sentinel 初始化向导              ║
-╚══════════════════════════════════════╝
-""")
-    if CONFIG_FILE.exists():
-        with open(CONFIG_FILE) as f:
-            cfg = yaml.safe_load(f) or DEFAULT_CONFIG
-        click.echo("📋 已有配置，在此基础上升级\n")
-    else:
-        cfg = DEFAULT_CONFIG.copy()
-        click.echo("🆕 首次配置\n")
-
-    click.secho("━━━ AI 模型 ━━━", fg="cyan")
-    providers = ["openai", "anthropic", "deepseek", "zhipu", "ollama", "custom"]
-    p = click.prompt(f"提供商 ({'/'.join(providers)})", default=cfg["model"].get("provider", "openai"))
-    cfg["model"]["provider"] = p if p in providers else "openai"
-
-    defaults = {"openai": "gpt-4o-mini", "anthropic": "claude-sonnet-4-20250514",
-                "deepseek": "deepseek-chat", "zhipu": "glm-4-flash", "ollama": "llama3"}
-    cfg["model"]["model"] = click.prompt("模型", default=defaults.get(p, "gpt-4o-mini"))
-
-    key = click.prompt("API Key（回车跳过）", default="", hide_input=True, show_default=False)
-    if key:
-        cfg["model"]["api_key"] = key
-    click.echo("✅ 模型配置完成\n")
-
-    click.secho("━━━ 告警通知 ━━━", fg="cyan")
-    plats = []
-    if click.confirm("飞书？", default=False):
-        plats.append({"type": "feishu", "webhook_url": click.prompt("  Webhook")})
-    if click.confirm("QQ Bot？", default=False):
-        plats.append({"type": "qqbot", "app_id": click.prompt("  App ID"), "token": click.prompt("  Token", hide_input=True)})
-    cfg["platforms"] = plats
-    click.echo(f"✅ {len(plats)} 个平台\n")
-
-    click.secho("━━━ 日志源 ━━━", fg="cyan")
-    logs = click.prompt("日志路径（逗号分隔）", default="").strip()
-    if logs:
-        cfg.setdefault("scanning", {})["log_sources"] = [x.strip() for x in logs.split(",") if x.strip()]
-    click.echo("✅ 配置完成\n")
-
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(CONFIG_FILE, "w") as f:
-        yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+    """运行交互式配置向导（支持 litellm 100+ AI 模型）"""
+    from sentinel_cli.setup_wizard import run_setup_wizard
+    run_setup_wizard(CONFIG_FILE)
 
     click.secho("╔══════════════════════════════════════╗", fg="green")
     click.secho("║  ✅ 配置完成！ sentinel start 开始  ║", fg="green")
@@ -249,7 +206,7 @@ def start():
         cfg = yaml.safe_load(f)
 
     log_sources = cfg.get("scanning", {}).get("log_sources", [])
-    click.secho("🚀 Sentinel v0.2.0 启动\n", fg="cyan")
+    click.secho("🚀 Sentinel v0.3.0 启动\n", fg="cyan")
     click.echo(f"  模型:   {cfg['model']['provider']}/{cfg['model']['model']}")
     click.echo(f"  日志源: {len(log_sources)} 个")
     click.echo(f"  仪表盘: http://127.0.0.1:8443")
@@ -281,7 +238,7 @@ def stop():
 @cli.command()
 def status():
     """状态"""
-    click.echo("📊 Sentinel v0.2.0\n")
+    click.echo("📊 Sentinel v0.3.0\n")
     if CONFIG_FILE.exists():
         cfg = yaml.safe_load(open(CONFIG_FILE))
         click.echo(f"  模型: {cfg['model']['provider']}/{cfg['model']['model']}")

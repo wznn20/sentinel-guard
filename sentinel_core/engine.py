@@ -1,25 +1,28 @@
 """
-Sentinel Core Engine — AI网络安全智能体
-借鉴 Hermes agent loop 设计，轻量但完整。
+Sentinel Core Engine — AI网络安全智能体 (v0.3.0)
+基于 litellm，支持 100+ AI 模型提供商
+借鉴 Hermes agent loop 设计
 """
 import json
-import logging
 import os
 import re
-import sys
+import time
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-logger = logging.getLogger("sentinel")
 
+# ═══════════════════════════════════════════
+# SentinelAgent — 核心对话引擎
+# ═══════════════════════════════════════════
 
 class SentinelAgent:
-    """Sentinel 核心 — 对话式AI安全助手
+    """Sentinel AI 安全助手 — litellm 驱动
 
     用法:
-        agent = SentinelAgent(config_path="~/.sentinel/config.yaml")
-        response = agent.chat("帮我分析一下最近的攻击日志")
+        agent = SentinelAgent(config_path=Path("~/.sentinel/config.yaml"))
+        response = agent.chat("分析最近的攻击日志")
     """
 
     def __init__(self, config_path: Optional[Path] = None):
@@ -29,204 +32,211 @@ class SentinelAgent:
             config_path = Path.home() / ".sentinel" / "config.yaml"
 
         self.config_path = Path(config_path)
+        self.cfg = {}
         if self.config_path.exists():
             with open(self.config_path) as f:
                 self.cfg = yaml.safe_load(f) or {}
-        else:
-            self.cfg = {}
 
         model_cfg = self.cfg.get("model", {})
         self.provider = model_cfg.get("provider", "openai")
-        self.model = model_cfg.get("model", "gpt-4o")
-        self.api_key = model_cfg.get("api_key", "") or os.environ.get("SENTINEL_API_KEY", "")
+        self.model = model_cfg.get("model", "gpt-4o-mini")
+        self.api_key = model_cfg.get("api_key", "")
+        self.base_url = model_cfg.get("base_url")
 
-        # 尝试从环境变量获取对应provider的key
+        # 尝试从环境变量获取 API key
         if not self.api_key:
             env_map = {
                 "openai": "OPENAI_API_KEY",
                 "anthropic": "ANTHROPIC_API_KEY",
+                "google": "GEMINI_API_KEY",
                 "deepseek": "DEEPSEEK_API_KEY",
+                "xai": "XAI_API_KEY",
+                "mistral": "MISTRAL_API_KEY",
+                "cohere": "COHERE_API_KEY",
+                "groq": "GROQ_API_KEY",
+                "together": "TOGETHER_API_KEY",
+                "fireworks": "FIREWORKS_API_KEY",
+                "replicate": "REPLICATE_API_KEY",
+                "zhipu": "ZHIPU_API_KEY",
+                "moonshot": "MOONSHOT_API_KEY",
+                "qwen": "DASHSCOPE_API_KEY",
+                "baidu": "BAIDU_API_KEY",
+                "minimax": "MINIMAX_API_KEY",
+                "stepfun": "STEPFUN_API_KEY",
+                "yi": "YI_API_KEY",
+                "doubao": "DOUBAO_API_KEY",
+                "baichuan": "BAICHUAN_API_KEY",
+                "openrouter": "OPENROUTER_API_KEY",
+                "bedrock": "AWS_ACCESS_KEY_ID",
             }
-            self.api_key = os.environ.get(env_map.get(self.provider, ""))
+            key_name = env_map.get(self.provider, "")
+            if key_name:
+                self.api_key = os.environ.get(key_name, "")
+                # bedrock 需要额外处理
+                if self.provider == "bedrock":
+                    secret = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+                    region = os.environ.get("AWS_REGION_NAME", "us-east-1")
+                    if self.api_key and secret:
+                        os.environ.setdefault("AWS_SECRET_ACCESS_KEY", secret)
+                        os.environ.setdefault("AWS_REGION_NAME", region)
 
-        self._client = None
+        # 最后兜底：SENTINEL_API_KEY
+        if not self.api_key:
+            self.api_key = os.environ.get("SENTINEL_API_KEY", "")
+
+        # 设置 base_url
+        if self.base_url:
+            os.environ["OPENAI_API_BASE"] = self.base_url
+
         self.messages: list[dict] = []
-        self.max_iterations = 20
-
-    def _get_client(self):
-        """惰性加载 OpenAI 客户端"""
-        if self._client is None:
-            from openai import OpenAI
-
-            if self.provider in ("openai", "custom"):
-                base = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
-            elif self.provider == "deepseek":
-                base = "https://api.deepseek.com/v1"
-            elif self.provider == "anthropic":
-                base = "https://api.anthropic.com/v1"
-            elif self.provider == "zhipu":
-                base = "https://open.bigmodel.cn/api/paas/v4"
-            elif self.provider == "ollama":
-                base = "http://localhost:11434/v1"
-            else:
-                base = "https://api.openai.com/v1"
-
-            self._client = OpenAI(api_key=self.api_key, base_url=base)
-        return self._client
+        self.max_iterations = 15
+        self._db = None
 
     @property
     def system_prompt(self) -> str:
+        """Sentinel 系统提示"""
         return """你是 Sentinel，一个纯防御型 AI 网络安全智能体。
 
-你的职责：
-1. 分析安全日志、检测攻击行为
-2. 提供安全建议和修复方案
-3. 回答网络安全相关问题
-4. 帮助用户理解和处理安全事件
+你的核心职责：
+1. **分析安全日志** — 识别 SQL注入、XSS、SSRF、命令注入、路径遍历等攻击
+2. **威胁情报查询** — 查询 IP/域名/URL 的安全信誉
+3. **安全配置检查** — 审计服务器配置并提供加固建议
+4. **事件响应指导** — 帮助用户理解和处理安全事件
 
 重要原则：
-- 你只做防御，不执行任何攻击性操作
-- 你不会提供恶意代码、漏洞利用脚本
-- 对于不确定的事情，你会诚实说明
-- 回复简洁专业，用中文
+- 纯防御 — 不提供攻击代码、漏洞利用脚本、恶意工具
+- 准确诚实 — 对于不确定的事情，明确说明
+- 简洁专业 — 用中文回复，直接给结论和建议
+- 可取证 — 发现攻击时，保留证据和来源
 
 你有以下工具可用：
-- analyze_logs: 分析指定路径的 Web 服务器日志
-- check_threat: 查询一个 IP/域名/URL 的威胁情报
-- scan_config: 检查服务器安全配置"""
+- analyze_logs(path): 分析指定路径的 Web 服务器日志，检测攻击行为
+- check_threat(target): 查询 IP/域名/URL 的威胁情报（模拟）
+- scan_config(path): 检查服务器/应用的安全配置
 
-    def chat(self, message: str, stream: bool = False) -> str:
-        """发送消息并获取回复（对话模式）"""
-        if not self.api_key:
-            return (
-                "❌ 未配置 API Key。请运行 `sentinel setup` 设置，"
-                "或设置环境变量 SENTINEL_API_KEY / OPENAI_API_KEY。"
-            )
+工具使用规则：
+- 如果用户提供了日志路径，先调用 analyze_logs
+- 如果用户提到了可疑 IP/域名，先调用 check_threat
+- 如果用户问配置安全，先调用 scan_config
+- 工具返回 JSON，你需要解读并给出自然语言建议"""
 
-        # 如果消息列表为空，添加系统提示
-        if not self.messages:
-            self.messages.append({"role": "system", "content": self.system_prompt})
+    # ── 工具集 ──
 
-        self.messages.append({"role": "user", "content": message})
+    def tool_analyze_logs(self, path: str) -> str:
+        """分析 Web 服务器日志"""
+        from sentinel_security.traffic.signatures.web_attacks import ATTACK_SIGNATURES
 
         try:
-            response = self._run_loop(stream=stream)
+            p = Path(path)
+            if not p.exists():
+                return json.dumps({"error": f"文件不存在: {path}"})
+
+            content = p.read_text(errors="ignore")
+            lines = content.split("\n")
+            findings = []
+
+            for sig in ATTACK_SIGNATURES:
+                matches = sig["pattern"].findall(content)
+                if matches:
+                    findings.append({
+                        "attack_type": sig["name"],
+                        "severity": sig["severity"],
+                        "category": sig["category"],
+                        "count": len(matches),
+                        "samples": matches[:3],
+                    })
+
+            return json.dumps({
+                "file": path,
+                "total_lines": len(lines),
+                "findings": findings,
+                "summary": f"发现 {len(findings)} 类攻击特征" if findings else "未发现已知攻击特征",
+                "timestamp": datetime.now().isoformat(),
+            }, ensure_ascii=False, indent=2)
         except Exception as e:
-            response = f"❌ 调用 AI 模型失败: {e}\n请检查: 1) API Key 是否正确 2) 网络是否可达 3) 模型名称是否支持"
-            self.messages.pop()  # 移除失败的用户消息
+            return json.dumps({"error": str(e)})
 
-        return response
+    def tool_check_threat(self, target: str) -> str:
+        """威胁情报查询（模拟）"""
+        import hashlib
 
-    def _run_loop(self, stream: bool = False) -> str:
-        """核心 agent loop — 调用模型 → 执行工具 → 循环直到得到文本回复"""
-        client = self._get_client()
-        tools = self._get_tools()
-        tool_schemas = self._tool_schemas()
+        # 简化的威胁判断逻辑
+        is_ip = re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", target)
 
-        # 保持消息列表在合理长度
-        if len(self.messages) > 30:
-            # 保留系统消息 + 最近29条
-            self.messages = [self.messages[0]] + self.messages[-29:]
-
-        call_count = 0
-        while call_count < self.max_iterations:
-            call_count += 1
-
-            kwargs = dict(
-                model=self.model,
-                messages=self.messages,
-                max_tokens=2048,
-            )
-            if tool_schemas:
-                kwargs["tools"] = tool_schemas
-
-            if stream:
-                response = client.chat.completions.create(**kwargs, stream=True)
-                # 流式模式：收集完整响应
-                full_content = ""
-                tool_calls_data = []
-                for chunk in response:
-                    delta = chunk.choices[0].delta
-                    if delta.content:
-                        full_content += delta.content
-                    if delta.tool_calls:
-                        for tc in delta.tool_calls:
-                            idx = tc.index
-                            while len(tool_calls_data) <= idx:
-                                tool_calls_data.append({"id": "", "function": {"name": "", "arguments": ""}})
-                            if tc.id:
-                                tool_calls_data[idx]["id"] = tc.id
-                            if tc.function:
-                                if tc.function.name:
-                                    tool_calls_data[idx]["function"]["name"] = tc.function.name
-                                tool_calls_data[idx]["function"]["arguments"] += tc.function.arguments or ""
-
-                if tool_calls_data:
-                    self.messages.append({"role": "assistant", "content": full_content or None, "tool_calls": tool_calls_data})
-                    for tc in tool_calls_data:
-                        result = self._execute_tool(tc["function"]["name"], tc["function"]["arguments"])
-                        self.messages.append({
-                            "role": "tool",
-                            "tool_call_id": tc["id"],
-                            "content": result,
-                        })
-                    continue
-                else:
-                    self.messages.append({"role": "assistant", "content": full_content})
-                    return full_content
-            else:
-                response = client.chat.completions.create(**kwargs)
-                msg = response.choices[0].message
-
-                if msg.tool_calls:
-                    # 记录助手消息
-                    assistant_msg = {"role": "assistant", "content": msg.content}
-                    tcs = []
-                    for tc in msg.tool_calls:
-                        tcs.append({
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-                        })
-                    assistant_msg["tool_calls"] = tcs
-                    self.messages.append(assistant_msg)
-
-                    # 执行工具
-                    for tc in tcs:
-                        result = self._execute_tool(tc["function"]["name"], tc["function"]["arguments"])
-                        self.messages.append({
-                            "role": "tool",
-                            "tool_call_id": tc["id"],
-                            "content": result,
-                        })
-                    continue
-                else:
-                    self.messages.append({"role": "assistant", "content": msg.content})
-                    return msg.content
-
-        return "⚠️ 达到最大推理步数，请简化问题重试。"
-
-    def _get_tools(self) -> dict:
-        """返回工具函数映射"""
-        return {
-            "analyze_logs": self._tool_analyze_logs,
-            "check_threat": self._tool_check_threat,
-            "scan_config": self._tool_scan_config,
+        result = {
+            "target": target,
+            "type": "ip" if is_ip else "domain",
+            "risk_level": "low",
+            "known_malicious": False,
+            "recommendations": [],
+            "timestamp": datetime.now().isoformat(),
         }
 
-    def _tool_schemas(self) -> list:
-        """OpenAI 工具 schema"""
-        return [
+        # 模拟已知恶意 IP
+        known_bad = ["185.220.101.", "45.33.32.", "192.42.116.", "23.129.64."]
+        if is_ip and any(target.startswith(p) for p in known_bad):
+            result["risk_level"] = "high"
+            result["known_malicious"] = True
+            result["recommendations"] = ["立即封禁此IP", "检查相关访问日志", "更新防火墙规则"]
+
+        return json.dumps(result, ensure_ascii=False, indent=2)
+
+    def tool_scan_config(self, path: str) -> str:
+        """安全配置检查"""
+        p = Path(path)
+        if not p.exists():
+            return json.dumps({"error": f"路径不存在: {path}"})
+
+        findings = []
+        try:
+            content = p.read_text(errors="ignore")
+
+            # 常见不安全配置检测
+            checks = [
+                ("debug.*=.*true", "debug 模式开启", "high", "生产环境应关闭 debug 模式"),
+                ("password.*=.*['\"]?(admin|123456|password)['\"]?", "弱密码", "critical", "检测到弱密码，请立即更换"),
+                ("ssl.*=.*false", "SSL 未启用", "high", "建议启用 SSL/TLS"),
+                ("0\\.0\\.0\\.0", "监听所有接口", "medium", "确认是否需要绑定所有网络接口"),
+                ("PermitRootLogin.*yes", "SSH root 登录", "high", "建议禁用 root SSH 登录"),
+                ("PasswordAuthentication.*yes", "SSH 密码认证", "medium", "建议使用密钥认证替代密码"),
+            ]
+
+            for pattern, issue, severity, fix in checks:
+                matches = re.findall(pattern, content, re.IGNORECASE)
+                if matches:
+                    findings.append({
+                        "issue": issue,
+                        "severity": severity,
+                        "matches": matches[:3],
+                        "fix": fix,
+                    })
+
+            return json.dumps({
+                "file": path,
+                "findings": findings,
+                "summary": f"发现 {len(findings)} 个安全问题" if findings else "未发现已知安全问题",
+                "timestamp": datetime.now().isoformat(),
+            }, ensure_ascii=False, indent=2)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    # ── 聊天 ──
+
+    def chat(self, message: str, stream: bool = False) -> str:
+        """发送消息并获取回复"""
+        if not self.api_key and self.provider not in ("ollama", "vllm", "lmstudio"):
+            return "❌ 未配置 API Key。请运行 sentinel setup 或设置环境变量。"
+
+        tools = [
             {
                 "type": "function",
                 "function": {
                     "name": "analyze_logs",
-                    "description": "分析 Web 服务器日志文件，检测攻击行为",
+                    "description": "分析指定路径的 Web 服务器日志，检测 SQL注入/XSS/SSRF/命令注入等攻击行为",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "path": {"type": "string", "description": "日志文件完整路径"},
-                            "lines": {"type": "integer", "description": "分析最近N行，默认500", "default": 500},
+                            "path": {"type": "string", "description": "日志文件路径，如 /var/log/nginx/access.log"}
                         },
                         "required": ["path"],
                     },
@@ -236,11 +246,11 @@ class SentinelAgent:
                 "type": "function",
                 "function": {
                     "name": "check_threat",
-                    "description": "查询 IP/域名/URL 的基本威胁信息（whois、端口等）",
+                    "description": "查询一个 IP 地址、域名或 URL 的威胁情报和风险等级",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "target": {"type": "string", "description": "IP地址、域名、或URL"},
+                            "target": {"type": "string", "description": "IP地址、域名或URL"}
                         },
                         "required": ["target"],
                     },
@@ -250,160 +260,186 @@ class SentinelAgent:
                 "type": "function",
                 "function": {
                     "name": "scan_config",
-                    "description": "检查当前服务器的安全配置状态",
+                    "description": "检查服务器或应用的安全配置文件，发现弱密码/调试模式/不安全配置等问题",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "check_type": {
-                                "type": "string",
-                                "enum": ["ssh", "firewall", "ports", "all"],
-                                "description": "检查类型",
-                                "default": "all",
-                            },
+                            "path": {"type": "string", "description": "配置文件路径，如 /etc/ssh/sshd_config 或 .env"}
                         },
+                        "required": ["path"],
                     },
                 },
             },
         ]
 
-    def _execute_tool(self, name: str, args_str: str) -> str:
-        """执行工具调用"""
-        try:
-            args = json.loads(args_str) if args_str else {}
-        except json.JSONDecodeError:
-            args = {}
+        self.messages.append({"role": "user", "content": message})
 
-        tool_fn = self._get_tools().get(name)
-        if tool_fn:
+        try:
+            from litellm import completion
+        except ImportError:
+            return "❌ 需要安装 litellm: pip install litellm"
+
+        # 构建 litellm 模型名
+        litellm_model = self._build_model_name()
+
+        for iteration in range(self.max_iterations):
             try:
-                return tool_fn(**args)
+                resp = completion(
+                    model=litellm_model,
+                    messages=[{"role": "system", "content": self.system_prompt}] + self.messages[-20:],
+                    tools=tools,
+                    tool_choice="auto",
+                    api_key=self.api_key or None,
+                    api_base=self.base_url,
+                    timeout=60,
+                )
             except Exception as e:
-                return f"工具执行错误: {e}"
-        return f"未知工具: {name}"
+                error_msg = str(e)
+                if "api_key" in error_msg.lower() or "unauthorized" in error_msg.lower() or "authentication" in error_msg.lower():
+                    return f"❌ API 认证失败。请检查 API Key 是否正确。\n\n运行 sentinel setup 重新配置。"
+                elif "timeout" in error_msg.lower():
+                    return f"⏱️ 请求超时。网络可能有问题，请重试。"
+                elif "not found" in error_msg.lower() and "model" in error_msg.lower():
+                    return f"❌ 模型 '{self.model}' 在提供商 '{self.provider}' 上不存在。\n\n请运行 sentinel setup 更换模型。"
+                else:
+                    return f"❌ 请求失败: {error_msg[:200]}"
 
-    # ── 工具实现 ──
+            msg = resp.choices[0].message
 
-    def _tool_analyze_logs(self, path: str, lines: int = 500) -> str:
-        """分析日志文件"""
-        p = Path(path)
-        if not p.exists():
-            return f"❌ 文件不存在: {path}"
+            if msg.tool_calls:
+                self.messages.append({"role": "assistant", "content": msg.content or "", "tool_calls": [
+                    {"id": tc.id, "type": "function", "function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                    for tc in msg.tool_calls
+                ]} if hasattr(msg, "tool_calls") and msg.tool_calls else {"role": "assistant", "content": msg.content or ""})
 
-        try:
-            with open(p, errors="ignore") as f:
-                all_lines = f.readlines()
+                for tc in msg.tool_calls or []:
+                    func_name = tc.function.name
+                    try:
+                        args = json.loads(tc.function.arguments)
+                    except json.JSONDecodeError:
+                        args = {}
 
-            recent = all_lines[-lines:] if len(all_lines) > lines else all_lines
-            content = "".join(recent)
+                    # 执行工具
+                    if func_name == "analyze_logs":
+                        result = self.tool_analyze_logs(args.get("path", ""))
+                    elif func_name == "check_threat":
+                        result = self.tool_check_threat(args.get("target", ""))
+                    elif func_name == "scan_config":
+                        result = self.tool_scan_config(args.get("path", ""))
+                    else:
+                        result = json.dumps({"error": f"未知工具: {func_name}"})
 
-            # 攻击特征检测
-            from sentinel_security.traffic.signatures.web_attacks import ATTACK_SIGNATURES
+                    self.messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "name": func_name,
+                        "content": result,
+                    })
+                continue
 
-            findings = []
-            for sig in ATTACK_SIGNATURES:
-                matches = sig["pattern"].findall(content)
-                if matches:
-                    findings.append(f"- {sig['name']} ({sig['severity']}): 发现 {len(matches)} 处匹配")
+            # 文本回复
+            if msg.content:
+                self.messages.append({"role": "assistant", "content": msg.content})
+                return msg.content
 
-            summary = f"""日志分析结果: {path}
-总行数: {len(all_lines)}
-分析范围: 最近 {len(recent)} 行
+            return "（模型未返回内容）"
 
-攻击特征检测:
-{chr(10).join(findings) if findings else '✅ 未发现已知攻击特征'}
+        return "⚠️ 达到最大工具调用次数，请简化问题。"
 
-原始日志样例 (最近10行):
-{''.join(recent[-10:])[:2000]}
-"""
-            return summary
-        except Exception as e:
-            return f"❌ 日志分析失败: {e}"
+    def _build_model_name(self) -> str:
+        """构建 litellm 兼容的模型名（provider/model）"""
+        # 这些 provider 在 litellm 中不需要前缀
+        no_prefix = {"openai", "anthropic", "deepseek", "google", "groq", "mistral", "cohere", "xai"}
+        if self.provider in no_prefix:
+            return f"{self.provider}/{self.model}"
 
-    def _tool_check_threat(self, target: str) -> str:
-        """威胁情报查询"""
-        import subprocess
+        # litellm 特殊前缀映射
+        prefix_map = {
+            "zhipu": "zhipu",
+            "qwen": "dashscope",
+            "moonshot": "moonshot",
+            "baidu": "baidu",
+            "minimax": "minimax",
+            "stepfun": "stepfun",
+            "yi": "yi",
+            "doubao": "doubao",
+            "baichuan": "baichuan",
+            "openrouter": "openrouter",
+            "together": "together_ai",
+            "fireworks": "fireworks_ai",
+            "replicate": "replicate",
+            "bedrock": "bedrock",
+            "vertex": "vertex_ai",
+            "azure": "azure",
+            "ollama": "ollama",
+            "vllm": "openai",
+            "lmstudio": "openai",
+            "custom": "openai",
+        }
 
-        results = [f"威胁查询: {target}\n"]
+        prefix = prefix_map.get(self.provider, self.provider)
+        return f"{prefix}/{self.model}"
 
-        # 提取IP或域名
-        clean = target.replace("https://", "").replace("http://", "").split("/")[0].split(":")[0]
-
-        # DNS查询
-        try:
-            import socket
-            ip = socket.gethostbyname(clean)
-            results.append(f"解析IP: {ip}")
-            results.append(f"主机名: {socket.gethostbyaddr(ip)[0] if ip != clean else 'N/A'}")
-        except Exception:
-            results.append("DNS解析: 失败")
-
-        # 检查是否可ping
-        try:
-            r = subprocess.run(["ping", "-c", "1", "-W", "3", clean],
-                             capture_output=True, text=True, timeout=5)
-            results.append(f"可达性: {'✅ 可达' if r.returncode == 0 else '❌ 不可达'}")
-        except Exception:
-            results.append("可达性: 无法检测")
-
-        # 检查本地端口（仅对localhost/内网有效）
-        try:
-            r = subprocess.run(["ss", "-tlnp"], capture_output=True, text=True, timeout=3)
-            listening = [l for l in r.stdout.split("\n") if "LISTEN" in l]
-            results.append(f"\n本机监听端口: {len(listening)} 个")
-        except Exception:
-            pass
-
-        return "\n".join(results)
-
-    def _tool_scan_config(self, check_type: str = "all") -> str:
-        """安全配置检查"""
-        import subprocess
-        import platform
-
-        results = [f"安全配置检查 ({platform.system()})\n"]
-
-        if check_type in ("ssh", "all"):
-            sshd_config = Path("/etc/ssh/sshd_config")
-            if sshd_config.exists():
-                content = sshd_config.read_text()
-                issues = []
-                if "PermitRootLogin yes" in content and "PermitRootLogin prohibit-password" not in content:
-                    issues.append("⚠️  Root登录未禁用")
-                if "PasswordAuthentication yes" in content:
-                    issues.append("⚠️  密码认证已启用（建议用密钥）")
-                if "Port 22" in content and "Port " not in content.replace("Port 22", ""):
-                    issues.append("ℹ️  使用默认22端口")
-                results.append(f"SSH配置: {sshd_config}")
-                results.extend(issues if issues else ["✅ SSH配置安全"])
-            else:
-                results.append("SSH: 未找到 sshd_config")
-
-        if check_type in ("firewall", "all"):
-            try:
-                r = subprocess.run(["iptables", "-L", "-n"], capture_output=True, text=True, timeout=5)
-                rules_count = len([l for l in r.stdout.split("\n") if l and not l.startswith("Chain")])
-                results.append(f"\n防火墙规则: {rules_count} 条")
-            except Exception:
-                results.append("\n防火墙: 无法检查 (需要 root)")
-
-        if check_type in ("ports", "all"):
-            try:
-                r = subprocess.run(["ss", "-tlnp"], capture_output=True, text=True, timeout=3)
-                ports = []
-                for line in r.stdout.split("\n"):
-                    if "LISTEN" in line:
-                        parts = line.split()
-                        if len(parts) >= 5:
-                            addr = parts[4]
-                            ports.append(addr)
-                results.append(f"\n监听端口:\n" + "\n".join(f"  {p}" for p in ports) if ports else "  无对外监听")
-            except Exception:
-                pass
-
-        return "\n".join(results)
+    def clear(self):
+        """清空对话历史"""
+        self.messages = []
 
 
-# 便捷函数
-def create_agent(config_path: Optional[str] = None) -> SentinelAgent:
-    """工厂函数 — 从配置文件创建 Agent"""
-    return SentinelAgent(Path(config_path) if config_path else None)
+# ═══════════════════════════════════════════
+# 告警数据库
+# ═══════════════════════════════════════════
+
+class AlertDB:
+    """告警数据库管理"""
+
+    def __init__(self, db_path: Optional[Path] = None):
+        self.db_path = db_path or Path.home() / ".sentinel" / "alerts.db"
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._init_db()
+
+    def _init_db(self):
+        conn = sqlite3.connect(str(self.db_path))
+        conn.execute("""CREATE TABLE IF NOT EXISTS alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            type TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            source TEXT,
+            evidence TEXT,
+            resolved INTEGER DEFAULT 0
+        )""")
+        conn.commit()
+        conn.close()
+
+    def insert(self, alert_type: str, severity: str, source: str, evidence: str = ""):
+        conn = sqlite3.connect(str(self.db_path))
+        conn.execute(
+            "INSERT INTO alerts (timestamp, type, severity, source, evidence) VALUES (?,?,?,?,?)",
+            (datetime.now().isoformat(), alert_type, severity, source, evidence[:500]),
+        )
+        conn.commit()
+        conn.close()
+
+    def stats(self) -> dict:
+        conn = sqlite3.connect(str(self.db_path))
+        total = conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+        unresolved = conn.execute("SELECT COUNT(*) FROM alerts WHERE resolved=0").fetchone()[0]
+        by_severity = {}
+        for row in conn.execute("SELECT severity, COUNT(*) FROM alerts GROUP BY severity"):
+            by_severity[row[0]] = row[1]
+        conn.close()
+        return {"total": total, "unresolved": unresolved, "by_severity": by_severity}
+
+    def list(self, limit: int = 20, unresolved_only: bool = False) -> list:
+        conn = sqlite3.connect(str(self.db_path))
+        query = "SELECT id, timestamp, type, severity, source, evidence, resolved FROM alerts"
+        if unresolved_only:
+            query += " WHERE resolved=0"
+        query += " ORDER BY id DESC LIMIT ?"
+        rows = conn.execute(query, (limit,)).fetchall()
+        conn.close()
+        return [
+            {"id": r[0], "timestamp": r[1], "type": r[2], "severity": r[3],
+             "source": r[4], "evidence": r[5], "resolved": bool(r[6])}
+            for r in rows
+        ]

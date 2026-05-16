@@ -862,7 +862,7 @@ footer {
           <span class="terminal-title">root@server:~# sentinel</span>
         </div>
         <div class="terminal-body" id="terminal-body">
-          <div class="terminal-line"><span class="prompt">$ </span><span class="cmd">curl -fsSL https://github.com/wznn20/sentinel-guard/releases/download/v0.1.1/sentinel_guard-0.1.0-py3-none-any.whl | bash</span></div>
+          <div class="terminal-line"><span class="prompt">$ </span><span class="cmd">pip install https://github.com/wznn20/sentinel-guard/releases/download/v0.2.0/sentinel_guard-0.2.0-py3-none-any.whl</span></div>
         </div>
       </div>
     </div>
@@ -1176,12 +1176,12 @@ footer {
         </button>
       </div>
       <div class="code-block" id="install-code">
-        <span class="comment"># Sentinel 一键安装 — Linux / macOS</span><br>
-        <span class="comment"># 自动检测环境 · 安装依赖 · 启动守护进程</span><br>
-        <span class="cmd-highlight">curl -fsSL https://github.com/wznn20/sentinel-guard/releases/download/v0.1.1/sentinel_guard-0.1.0-py3-none-any.whl</span> | <span class="cmd-highlight">bash</span><br>
+        <span class="comment"># Sentinel 安装 — 全平台</span><br>
+        <span class="comment"># 一条命令，无需 Git，自动安装依赖</span><br>
+        <span class="cmd-highlight">pip install https://github.com/wznn20/sentinel-guard/releases/download/v0.2.0/sentinel_guard-0.2.0-py3-none-any.whl</span><br>
         <br>
-        <span class="comment"># 或使用 pip 安装</span><br>
-        pip install git+https://github.com/wznn20/sentinel-guard.git<br>
+        <span class="comment"># 或从 GitHub 安装（需 Git）</span><br>
+        pip install git+https://github.com/wznn20/sentinel-guard.git@v0.2.0<br>
         sentinel setup
       </div>
     </div>
@@ -1189,10 +1189,10 @@ footer {
     <div class="install-notes" id="install-notes">
       <span class="note-title">📋 安装说明</span>
       <ul>
-        <li>需要 Python >= 3.11</li>
-        <li>自动安装系统依赖 (libpcap, tcpdump)</li>
-        <li>自动注册为系统服务 (systemd)，开机自启</li>
-        <li>macOS 使用 launchd，Linux 使用 systemd</li>
+        <li>需要 Python >= 3.10</li>
+        <li>自动安装依赖</li>
+        <li>支持 systemd / launchd 服务注册</li>
+        <li>安装后运行 <code>sentinel setup</code> 完成配置</li>
       </ul>
     </div>
 
@@ -1239,19 +1239,19 @@ window.addEventListener('scroll', () => {
 // ── OS-aware install commands ──
 const osCommands = {
   linux: {
-    copy: 'curl -fsSL https://github.com/wznn20/sentinel-guard/releases/download/v0.1.1/sentinel_guard-0.1.0-py3-none-any.whl | bash',
+    copy: 'pip install https://github.com/wznn20/sentinel-guard/releases/download/v0.2.0/sentinel_guard-0.2.0-py3-none-any.whl',
     notes: `<span class="note-title">📋 安装说明</span>
-<ul><li>需要 Python >= 3.11</li><li>自动安装系统依赖 (libpcap, tcpdump)</li><li>自动注册为系统服务 (systemd)，开机自启</li><li>macOS 使用 launchd，Linux 使用 systemd</li></ul>`
+<ul><li>需要 Python >= 3.10</li><li>自动安装依赖</li><li>支持 systemd 服务注册，开机自启</li><li>安装后运行 <code>sentinel setup</code> 完成配置</li></ul>`
   },
   macos: {
-    copy: 'pip install git+https://github.com/wznn20/sentinel-guard.git',
+    copy: 'pip install https://github.com/wznn20/sentinel-guard/releases/download/v0.2.0/sentinel_guard-0.2.0-py3-none-any.whl',
     notes: `<span class="note-title">📋 安装说明</span>
-<ul><li>需要 Python >= 3.11 (brew install python@3.12)</li><li>自动安装 Homebrew 依赖 (libpcap)</li><li>自动注册 launchd 服务，开机自启</li><li>控制面板: <code>sentinel dashboard</code></li></ul>`
+<ul><li>需要 Python >= 3.10</li><li>自动安装依赖</li><li>自动注册 launchd 服务，开机自启</li><li>控制面板: <code>sentinel dashboard</code></li></ul>`
   },
   windows: {
-    copy: 'irm https://raw.githubusercontent.com/wznn20/sentinel-guard/main/scripts/install.ps1 | iex',
+    copy: 'pip install https://github.com/wznn20/sentinel-guard/releases/download/v0.2.0/sentinel_guard-0.2.0-py3-none-any.whl',
     notes: `<span class="note-title">📋 安装说明</span>
-<ul><li>需要 <b>管理员权限</b> 运行 PowerShell</li><li>自动安装 Python 3.12 (winget)</li><li>自动安装 Npcap (流量分析驱动)</li><li>自动注册 Windows 服务，开机自启</li><li>支持 Windows 10/11 (x64)</li></ul>`
+<ul><li>需要 Python >= 3.10（<a href="https://python.org" target="_blank">python.org</a> 下载）</li><li>自动安装依赖</li><li>支持 Windows 10/11 (x64)</li><li>安装后运行 <code>sentinel setup</code> 完成配置</li></ul>`
   },
   docker: {
     copy: 'docker run -d --name sentinel --network host -v ~/.sentinel/config:/home/sentinel/.sentinel/config ghcr.io/wznn20/sentinel-guard:latest',
@@ -1268,9 +1268,9 @@ function switchOS(os, label) {
   document.getElementById('os-label').textContent = label;
   // Build code HTML for selected OS
   var cmds = {
-    linux: '<span class="comment"># Sentinel 一键安装 — Linux</span><br><span class="comment"># 自动检测环境 · 安装依赖 · 启动守护进程</span><br><span class="cmd-highlight">curl -fsSL https://github.com/wznn20/sentinel-guard/releases/download/v0.1.1/sentinel_guard-0.1.0-py3-none-any.whl</span> | <span class="cmd-highlight">bash</span><br><br><span class="comment"># 或使用 pip 安装</span><br>pip install git+https://github.com/wznn20/sentinel-guard.git<br>sentinel setup',
-    macos: '<span class="comment"># Sentinel 一键安装 — macOS</span><br><span class="comment"># 通过 Homebrew 或 Shell 脚本安装</span><br><span class="cmd-highlight">curl -fsSL https://github.com/wznn20/sentinel-guard/releases/download/v0.1.1/sentinel_guard-0.1.0-py3-none-any.whl</span> | <span class="cmd-highlight">bash</span><br><br><span class="comment"># 或使用 pip 安装</span><br>pip install git+https://github.com/wznn20/sentinel-guard.git<br>sentinel setup',
-    windows: '<span class="comment"># Sentinel 安装 — Windows PowerShell</span><br><span class="comment"># 以管理员身份运行 PowerShell</span><br><span class="cmd-highlight">irm https://sentinel.security/install.ps1</span> | <span class="cmd-highlight">iex</span><br><br><span class="comment"># 或使用 pip 安装</span><br>pip install git+https://github.com/wznn20/sentinel-guard.git<br>sentinel setup',
+    linux: '<span class="comment"># Sentinel 安装 — Linux</span><br><span class="comment"># 一条命令，无需 Git</span><br><span class="cmd-highlight">pip install https://github.com/wznn20/sentinel-guard/releases/download/v0.2.0/sentinel_guard-0.2.0-py3-none-any.whl</span><br><br><span class="comment"># 或从 GitHub 安装（需 Git）</span><br>pip install git+https://github.com/wznn20/sentinel-guard.git@v0.2.0<br>sentinel setup',
+    macos: '<span class="comment"># Sentinel 安装 — macOS</span><br><span class="comment"># 一条命令，无需 Git</span><br><span class="cmd-highlight">pip install https://github.com/wznn20/sentinel-guard/releases/download/v0.2.0/sentinel_guard-0.2.0-py3-none-any.whl</span><br><br><span class="comment"># 或从 GitHub 安装（需 Git）</span><br>pip install git+https://github.com/wznn20/sentinel-guard.git@v0.2.0<br>sentinel setup',
+    windows: '<span class="comment"># Sentinel 安装 — Windows</span><br><span class="comment"># 一条命令，无需 Git，无需管理员</span><br><span class="cmd-highlight">pip install https://github.com/wznn20/sentinel-guard/releases/download/v0.2.0/sentinel_guard-0.2.0-py3-none-any.whl</span><br><br><span class="comment"># 安装后初始化配置</span><br>sentinel setup',
     docker: '<span class="comment"># Sentinel — Docker 部署 (全平台)</span><br><span class="comment"># 拉取镜像并启动容器</span><br>docker pull <span class="cmd-highlight">ghcr.io/wznn20/sentinel-guard:latest</span><br><br><span class="cmd-highlight">docker run -d</span> \\<br>&nbsp;&nbsp;--name sentinel \\<br>&nbsp;&nbsp;--network host \\<br>&nbsp;&nbsp;-v ~/.sentinel/config:/home/sentinel/.sentinel/config \\<br>&nbsp;&nbsp;-v /var/log:/var/log:ro \\<br>&nbsp;&nbsp;-e SENTINEL_LLM_KEY=$SENTINEL_LLM_KEY \\<br>&nbsp;&nbsp;<span class="cmd-highlight">ghcr.io/wznn20/sentinel-guard:latest</span><br><br><span class="comment"># 或使用 docker compose</span><br><span class="cmd-highlight">docker compose up -d</span>'
   };
   document.getElementById('install-code').innerHTML = cmds[os];
