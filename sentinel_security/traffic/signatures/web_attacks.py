@@ -131,6 +131,14 @@ def detect_traversal(payload: str) -> list[SignatureMatch]:
     return matches
 
 
+# 统一攻击特征库（用于AI工具调用的批量检测）
+ALL_PATTERNS = SQLI_PATTERNS + XSS_PATTERNS + SSRF_PATTERNS + CMDI_PATTERNS + TRAVERSAL_PATTERNS
+
+ATTACK_SIGNATURES = [
+    {"name": name, "pattern": re.compile(pattern), "severity": severity}
+    for pattern, name, severity in ALL_PATTERNS
+]
+
 def analyze_http_request(method: str, path: str, headers: dict, body: str = "") -> list[SignatureMatch]:
     """综合分析HTTP请求 — 检测所有类型攻击"""
     all_matches = []
