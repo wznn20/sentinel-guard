@@ -80,6 +80,7 @@ class DeliveryConfig:
     twilio_from_number: str = ""
     platform_tokens: dict[str, str] = field(default_factory=dict)
     platform_base_urls: dict[str, str] = field(default_factory=dict)
+    platform_settings: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass
@@ -314,6 +315,14 @@ class KXConfig:
                 str(key): os.path.expandvars(str(value))
                 for key, value in (delivery_data.get("platform_base_urls") or {}).items()
             },
+            platform_settings={
+                str(key): {
+                    str(inner_key): os.path.expandvars(str(inner_value))
+                    for inner_key, inner_value in (value or {}).items()
+                }
+                for key, value in (delivery_data.get("platform_settings") or {}).items()
+                if isinstance(value, dict)
+            },
         )
 
         shell_data = data.get("shell") or {}
@@ -455,6 +464,7 @@ class KXConfig:
                 "twilio_from_number": self.delivery.twilio_from_number,
                 "platform_tokens": self.delivery.platform_tokens,
                 "platform_base_urls": self.delivery.platform_base_urls,
+                "platform_settings": self.delivery.platform_settings,
             },
             "shell": {
                 "executable": self.shell.executable,

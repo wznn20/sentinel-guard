@@ -52,6 +52,8 @@ kx chat
 - OpenAI / Anthropic / Gemini / DeepSeek / OpenRouter / Azure / Bedrock / Vertex
 - 国内主流模型提供商
 - Ollama / LM Studio / vLLM / 自定义 base URL
+- 模型连通性测试
+- 平台配置向导覆盖 QQBot、微信/WeCom、飞书、Telegram、Slack、Discord、WhatsApp、Signal、Matrix、Email、SMS、Yuanbao
 
 如需只写默认配置而不进入交互式向导：
 
