@@ -3,16 +3,16 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "sentinel-guard"
-version = "0.3.0"
-description = "AI网络安全智能体 — 纯防御型，支持 litellm 100+ AI 模型，7×24小时自主值守"
+name = "kx-agent"
+version = "0.1.0"
+description = "KX Agent — a gateway + memory + human loop agent"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
-    {name = "Sentinel Contributors"}
+    {name = "KX Contributors"}
 ]
-keywords = ["security", "ai", "cybersecurity", "ids", "monitoring", "llm"]
+keywords = ["agent", "memory", "gateway", "skills", "llm"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: System Administrators",
@@ -43,7 +43,8 @@ dashboard = [
 ]
 
 [project.scripts]
-sentinel = "sentinel_cli.main:cli"
+kx = "kx_agent.cli:cli"
+sentinel = "kx_agent.cli:cli"
 
 [project.entry-points."sentinel.plugins"]
 example = "plugins.example.main:SentinelPlugin"
@@ -53,7 +54,7 @@ line-length = 100
 target-version = "py311"
 
 [tool.hatch.build.targets.wheel]
-packages = ["sentinel_core", "sentinel_security", "sentinel_cli", "sentinel_dashboard", "sentinel_plugins"]
+packages = ["kx_agent", "sentinel_core", "sentinel_security", "sentinel_cli", "sentinel_dashboard", "sentinel_plugins"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
