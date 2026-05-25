@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 import uuid
 from pathlib import Path
+import tempfile
 
 import click
 
@@ -12,6 +15,7 @@ from .app_server import AppServer
 from .dashboard import DashboardServer
 from .config import KXConfig
 from .gateway import GatewayServer
+from .setup_wizard import run_setup_wizard
 
 
 HOME = Path.home() / ".kx"
@@ -29,13 +33,84 @@ def cli():
 
 
 @cli.command()
-def setup():
+@click.option("--default", "default_only", is_flag=True, help="Write default config without interactive prompts.")
+def setup(default_only):
     HOME.mkdir(parents=True, exist_ok=True)
-    cfg = KXConfig()
-    cfg.save(CONFIG_FILE)
-    (HOME / "skills").mkdir(parents=True, exist_ok=True)
-    click.echo(f"Saved {CONFIG_FILE}")
-    click.echo("Edit the config, then run `kx chat` or `kx serve`.")
+    if default_only:
+        cfg = KXConfig()
+        cfg.save(CONFIG_FILE)
+        (HOME / "skills").mkdir(parents=True, exist_ok=True)
+        click.echo(f"Saved default config to {CONFIG_FILE}")
+        click.echo("Run `kx chat`, `kx serve`, or rerun `kx setup` for interactive configuration.")
+        return
+    run_setup_wizard(CONFIG_FILE)
+
+
+@cli.command("self-test")
+def self_test():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        config_path = root / "config.yaml"
+        config_path.write_text(
+            f"""
+workspace:
+  root: "{root}"
+  allow_roots:
+    - "{root}"
+memory:
+  db_path: "{root / 'kx.sqlite'}"
+skills:
+  paths: []
+approval:
+  enabled: false
+sandbox:
+  read_roots:
+    - "{root}"
+  write_roots:
+    - "{root}"
+  shell_enabled: true
+  allow_shell_write: true
+  allow_shell_dangerous: true
+  allowed_shell_prefixes:
+    - "pwd"
+""",
+            encoding="utf-8",
+        )
+        agent = KXAgent(config_path)
+        sample = root / "sample.txt"
+        sample.write_text("hello from self-test", encoding="utf-8")
+        agent.memory.ensure_session("self-test", title="self test")
+        results = []
+        results.append(agent.execute_tool("self-test", "read_file", {"path": str(sample)}))
+        results.append(agent.execute_tool("self-test", "list_dir", {"path": str(root)}))
+        results.append(agent.execute_tool("self-test", "make_dir", {"path": str(root / "made")}))
+        results.append(agent.execute_tool("self-test", "write_file", {"path": str(root / "made" / "out.txt"), "content": "ok"}))
+        results.append(agent.execute_tool("self-test", "run_shell", {"command": "pwd", "cwd": str(root)}))
+        results.append(agent.execute_tool("self-test", "delete_file", {"path": str(root / "made" / "out.txt")}))
+    click.echo(json.dumps([r.__dict__ if hasattr(r, "__dict__") else r for r in results], ensure_ascii=False, indent=2))
+
+
+@cli.command("upgrate")
+@click.option("--branch", default="main")
+def upgrate(branch):
+    repo_root = Path(__file__).resolve().parents[1]
+    click.echo(f"Updating KX Agent from {repo_root} ({branch})")
+    pull = subprocess.run(["git", "-C", str(repo_root), "pull", "origin", branch], capture_output=True, text=True)
+    if pull.returncode != 0:
+        raise click.ClickException(pull.stderr.strip() or pull.stdout.strip() or "git pull failed")
+    python = sys.executable or "python3"
+    install = subprocess.run([python, "-m", "pip", "install", "."], cwd=str(repo_root), capture_output=True, text=True)
+    if install.returncode != 0:
+        raise click.ClickException(install.stderr.strip() or install.stdout.strip() or "pip install failed")
+    click.echo("KX Agent updated successfully.")
+
+
+@cli.command("upgrade")
+@click.option("--branch", default="main")
+def upgrade(branch):
+    """Alias of `kx upgrate`."""
+    ctx = click.get_current_context()
+    ctx.invoke(upgrate, branch=branch)
 
 
 @cli.command()

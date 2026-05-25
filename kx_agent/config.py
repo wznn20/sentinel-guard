@@ -18,8 +18,10 @@ def _platform_shell() -> str:
 @dataclass
 class ModelConfig:
     provider: str = "openai"
+    litellm_prefix: str | None = None
     model: str = "gpt-4o-mini"
     api_key: str = ""
+    api_key_env: str | None = None
     base_url: str | None = None
     temperature: float = 0.2
     max_tokens: int = 2048
@@ -228,9 +230,17 @@ class KXConfig:
             data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
             cfg._parse(data)
 
-        env_key = os.getenv("KX_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
-        if env_key and not cfg.model.api_key:
-            cfg.model.api_key = env_key
+        env_candidates = [
+            cfg.model.api_key_env or "",
+            "KX_API_KEY",
+            "OPENAI_API_KEY",
+        ]
+        for key in env_candidates:
+            if key and not cfg.model.api_key:
+                value = os.getenv(key, "")
+                if value:
+                    cfg.model.api_key = value
+                    break
         return cfg
 
     def _parse(self, data: dict[str, Any]) -> None:
@@ -239,8 +249,10 @@ class KXConfig:
         model_data = data.get("model") or {}
         self.model = ModelConfig(
             provider=str(model_data.get("provider", self.model.provider)),
+            litellm_prefix=model_data.get("litellm_prefix", self.model.litellm_prefix),
             model=str(model_data.get("model", self.model.model)),
             api_key=os.path.expandvars(str(model_data.get("api_key", self.model.api_key))),
+            api_key_env=model_data.get("api_key_env", self.model.api_key_env),
             base_url=model_data.get("base_url", self.model.base_url),
             temperature=float(model_data.get("temperature", self.model.temperature)),
             max_tokens=int(model_data.get("max_tokens", self.model.max_tokens)),
@@ -398,8 +410,10 @@ class KXConfig:
             "identity": self.identity,
             "model": {
                 "provider": self.model.provider,
+                "litellm_prefix": self.model.litellm_prefix,
                 "model": self.model.model,
                 "api_key": self.model.api_key,
+                "api_key_env": self.model.api_key_env,
                 "base_url": self.model.base_url,
                 "temperature": self.model.temperature,
                 "max_tokens": self.model.max_tokens,

@@ -4,12 +4,18 @@ import hashlib
 import hmac
 from pathlib import Path
 from unittest.mock import patch
+from click.testing import CliRunner
+
+import yaml
 
 from kx_agent.agent import KXAgent
 from kx_agent.channels import ChannelEvent, ChannelHub
 from kx_agent.app_server import AppServer
 from kx_agent.dashboard import DashboardServer
 from kx_agent.delivery import DeliveryResult, DeliveryService
+from kx_agent.config import KXConfig
+from kx_agent.setup_wizard import run_setup_wizard
+from kx_agent.cli import cli
 
 
 def _write_config(path: Path, body: str) -> Path:
@@ -42,6 +48,25 @@ approval:
     assert reply.route["agent_id"] == "main"
     tree = agent.memory.session_tree("s1")
     assert any(node["kind"] == "preference" for node in tree["nodes"])
+
+
+def test_model_config_preserves_litellm_prefix_and_api_key_env(tmp_path):
+    config_path = _write_config(
+        tmp_path / "config.yaml",
+        """
+model:
+  provider: openrouter
+  litellm_prefix: openrouter
+  model: anthropic/claude-sonnet-4
+  api_key: ""
+  api_key_env: OPENROUTER_API_KEY
+  base_url: null
+""",
+    )
+    cfg = KXConfig.load(config_path)
+    assert cfg.model.provider == "openrouter"
+    assert cfg.model.litellm_prefix == "openrouter"
+    assert cfg.model.api_key_env == "OPENROUTER_API_KEY"
 
 
 def test_write_request_creates_approval(tmp_path):
@@ -1111,6 +1136,103 @@ delivery:
     assert plan.platform == "slack"
     assert result.dry_run is True
     assert result.success is True
+
+
+def test_setup_wizard_writes_kx_model_and_delivery_config(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    def fake_input(prompt: str) -> str:
+        if "选择提供商" in prompt:
+            return "1"
+        if "选择模型" in prompt:
+            return "1"
+        if "Base URL" in prompt:
+            return ""
+        if "Temperature" in prompt:
+            return "0.3"
+        if "Max tokens" in prompt:
+            return "4096"
+        if "Workspace root" in prompt:
+            return str(tmp_path)
+        if "Allow roots" in prompt:
+            return str(tmp_path)
+        if "SQLite db path" in prompt:
+            return str(tmp_path / "kx.sqlite")
+        if "Gateway host" in prompt:
+            return "127.0.0.1"
+        if "Gateway port" in prompt:
+            return "8787"
+        if "Gateway title" in prompt:
+            return "KX Agent Gateway"
+        if "Delivery timeout" in prompt:
+            return "20"
+        if "Dashboard port" in prompt:
+            return "8899"
+        if "启用 adapters" in prompt:
+            return ""
+        return ""
+
+    confirm_values = {
+        "测试模型连通性？": True,
+        "Webhook 回复时自动真实发送？": True,
+        "启用 delivery 子系统？": True,
+        "启用 Telegram Bot？": False,
+        "配置 Slack？": False,
+        "配置 Discord？": False,
+        "配置 WhatsApp Cloud API？": False,
+        "配置 Feishu / Lark？": False,
+        "配置 Matrix？": False,
+        "配置 Signal？": False,
+        "配置 Email SMTP？": False,
+        "配置 Twilio SMS？": False,
+        "启用 approval gate？": True,
+        "启用 dashboard？": True,
+        "保存配置？": True,
+    }
+
+    def fake_confirm(prompt: str, default: bool = True) -> bool:
+        return confirm_values.get(prompt, default)
+
+    with patch("builtins.input", side_effect=fake_input), patch("getpass.getpass", return_value="sk-test"), patch("kx_agent.setup_wizard.confirm", side_effect=fake_confirm), patch("kx_agent.setup_wizard.test_connection", return_value=True):
+        result = run_setup_wizard(config_path)
+
+    assert result is not None
+    saved = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    assert saved["model"]["provider"] == "openai"
+    assert saved["model"]["litellm_prefix"] == "openai"
+    assert saved["model"]["api_key_env"] == "OPENAI_API_KEY"
+    assert saved["delivery"]["auto_send"] is True
+    assert saved["workspace"]["root"] == str(tmp_path)
+
+
+def test_cli_self_test_runs_tool_chain():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["self-test"])
+    assert result.exit_code == 0
+    assert "read_file" in result.output
+    assert "run_shell" in result.output
+
+
+def test_cli_upgrate_invokes_git_pull_and_pip_install():
+    runner = CliRunner()
+
+    class Proc:
+        def __init__(self):
+            self.returncode = 0
+            self.stdout = "ok"
+            self.stderr = ""
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return Proc()
+
+    with patch("kx_agent.cli.subprocess.run", side_effect=fake_run):
+        result = runner.invoke(cli, ["upgrate"])
+
+    assert result.exit_code == 0
+    assert any(cmd[:3] == ["git", "-C", "/root/hermes-security-agent"] for cmd in calls)
+    assert any("pip" in " ".join(cmd) for cmd in calls)
 
 
 def test_agent_log_delivery_records_tool_run(tmp_path):

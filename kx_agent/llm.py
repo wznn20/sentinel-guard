@@ -17,7 +17,8 @@ class LLMClient:
         self.config = config
 
     def chat(self, messages: list[dict[str, str]]) -> LLMResult:
-        model = f"{self.config.model.provider}/{self.config.model.model}"
+        prefix = self.config.model.litellm_prefix or self.config.model.provider
+        model = f"{prefix}/{self.config.model.model}" if prefix else self.config.model.model
         if not self.config.model.api_key:
             return LLMResult(
                 text=self._offline_reply(messages),

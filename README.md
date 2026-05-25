@@ -46,9 +46,23 @@ kx setup
 kx chat
 ```
 
+`kx setup` 现在是交互式配置向导，参考 Hermes setup，支持：
+
+- 第三方 API / OpenAI 兼容端点
+- OpenAI / Anthropic / Gemini / DeepSeek / OpenRouter / Azure / Bedrock / Vertex
+- 国内主流模型提供商
+- Ollama / LM Studio / vLLM / 自定义 base URL
+
+如需只写默认配置而不进入交互式向导：
+
+```bash
+kx setup --default
+```
+
 ## Main Commands
 
 - `kx chat` interactive agent loop
+- `kx self-test` run a local end-to-end toolchain self-check
 - `kx serve` local JSON gateway
 - `kx skills` list loaded skills
 - `kx memory --session <id>` inspect session memory tree
@@ -81,6 +95,7 @@ kx chat
 - `kx approve list|allow|deny` manage approvals
 - `kx tool list|run|history` inspect and run tools
 - `kx mcp` expose MCP tools over stdio
+- `kx upgrate` or `kx upgrade` update the local KX Agent repo and reinstall it
 
 ## Current Architecture
 
