@@ -46,7 +46,12 @@ kx setup
 kx chat
 ```
 
-`kx setup` 现在是交互式配置向导，参考 Hermes setup，支持：
+`kx setup` 现在是分层交互式配置向导，参考成熟 agent setup 体验，支持：
+
+- 推荐模式：云端 API 快速开始
+- 本地模式：Ollama / LM Studio / 自部署兼容 API
+- 高级模式：完整 provider 目录与细调
+- 平台配置改为按需选择，不再逐个平台连续提问
 
 - 第三方 API / OpenAI 兼容端点
 - OpenAI / Anthropic / Gemini / DeepSeek / OpenRouter / Azure / Bedrock / Vertex
@@ -65,6 +70,7 @@ kx setup --default
 
 - `kx chat` interactive agent loop
 - `kx self-test` run a local end-to-end toolchain self-check
+- self-test now validates read/list/write/shell/delete on a temporary sandbox workspace
 - `kx serve` local JSON gateway
 - `kx skills` list loaded skills
 - `kx memory --session <id>` inspect session memory tree
@@ -81,6 +87,7 @@ kx setup --default
 - worker plans may include controlled write actions under approval
 - `kx task write <task_id>` execute an approved worker write task
 - `kx dashboard` serve the local dashboard UI
+- `kx dashboard` and `kx app` now use configured host/port defaults when flags are omitted
 - `kx app` serve the unified local app server
 - `/webhook/event` accepts normalized channel events with stable session routing
 - `/adapters` lists registered channel adapters

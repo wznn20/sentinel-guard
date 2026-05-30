@@ -1210,6 +1210,8 @@ def test_cli_self_test_runs_tool_chain():
     assert result.exit_code == 0
     assert "read_file" in result.output
     assert "run_shell" in result.output
+    assert '"tool_name": "delete_file"' in result.output
+    assert '"status": "ok"' in result.output
 
 
 def test_cli_upgrate_invokes_git_pull_and_pip_install():
@@ -1233,6 +1235,30 @@ def test_cli_upgrate_invokes_git_pull_and_pip_install():
     assert result.exit_code == 0
     assert any(cmd[:3] == ["git", "-C", "/root/hermes-security-agent"] for cmd in calls)
     assert any("pip" in " ".join(cmd) for cmd in calls)
+
+
+def test_cli_dashboard_uses_agent_config_and_constructs_server():
+    runner = CliRunner()
+    created = {}
+
+    class FakeServer:
+        def __init__(self, agent, host="127.0.0.1", port=8899):
+            created["agent"] = agent
+            created["host"] = host
+            created["port"] = port
+            self.host = host
+            self.port = port
+
+        def serve(self):
+            created["served"] = True
+
+    with patch("kx_agent.cli.DashboardServer", FakeServer):
+        result = runner.invoke(cli, ["dashboard"])
+
+    assert result.exit_code == 0
+    assert created["host"] == created["agent"].config.dashboard.host
+    assert created["port"] == created["agent"].config.dashboard.port
+    assert created["served"] is True
 
 
 def test_agent_log_delivery_records_tool_run(tmp_path):

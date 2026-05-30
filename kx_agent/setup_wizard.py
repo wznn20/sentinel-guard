@@ -121,6 +121,25 @@ MODEL_GROUPS = {
     "💻 本地 / 自部署": ["ollama", "vllm", "lmstudio", "custom"],
 }
 
+QUICK_CLOUD_PROVIDERS = ["openai", "anthropic", "google", "deepseek", "openrouter", "qwen", "moonshot"]
+QUICK_LOCAL_PROVIDERS = ["ollama", "lmstudio", "vllm", "custom"]
+PLATFORM_FIELDS: list[tuple[str, str, list[tuple[str, str, str, bool]]]] = [
+    ("telegram", "Telegram", [("telegram", "Bot Token", "", True), ("telegram_chat_id", "Chat ID", "", False)]),
+    ("slack", "Slack", [("slack", "Bot Token", "", True), ("slack_webhook_url", "Webhook URL", "", False)]),
+    ("discord", "Discord", [("discord", "Webhook Token/Path", "", True), ("discord_webhook_url", "Webhook URL", "", False)]),
+    ("whatsapp", "WhatsApp", [("whatsapp", "Access Token", "", True), ("whatsapp_phone_number_id", "Phone Number ID", "", False), ("whatsapp_url", "Base URL", "https://graph.facebook.com/v19.0", False)]),
+    ("feishu", "Feishu", [("feishu", "Tenant/User Token", "", True), ("feishu_url", "Base URL", "https://open.feishu.cn", False)]),
+    ("wecom", "WeCom", [("wecom", "Webhook URL", "", False), ("wecom_corp_id", "Corp ID", "", False), ("wecom_agent_id", "Agent ID", "", False)]),
+    ("wecom_callback", "WeCom Callback", [("wecom_callback", "Callback URL", "", False), ("wecom_callback_token", "Token", "", True), ("wecom_callback_aes_key", "AES Key", "", True)]),
+    ("weixin", "Weixin", [("weixin", "Base URL", "", False), ("weixin_token", "Token", "", True), ("weixin_account_id", "Account ID", "", False)]),
+    ("matrix", "Matrix", [("matrix", "Token", "", True), ("matrix_url", "Homeserver URL", "", False)]),
+    ("signal", "Signal", [("signal", "HTTP daemon URL", "http://127.0.0.1:8080", False)]),
+    ("email", "Email", [("smtp_host", "SMTP Host", "", False), ("smtp_port", "SMTP Port", "587", False), ("smtp_username", "SMTP Username", "", False), ("smtp_password", "SMTP Password", "", True), ("default_from_email", "From Email", "", False)]),
+    ("sms", "SMS", [("twilio_account_sid", "Twilio Account SID", "", False), ("twilio_auth_token", "Twilio Auth Token", "", True), ("twilio_from_number", "Twilio From Number", "", False)]),
+    ("qqbot", "QQBot", [("qqbot_app_id", "App ID", "", False), ("qqbot_token", "Token", "", True), ("qqbot_secret", "Secret", "", True)]),
+    ("yuanbao", "Yuanbao", [("yuanbao", "Gateway URL", "", False), ("yuanbao_token", "Token", "", True)]),
+]
+
 
 def _pick_from_groups(groups: dict[str, list[str]], existing: str) -> str:
     options: list[str] = []
@@ -145,11 +164,50 @@ def _pick_from_groups(groups: dict[str, list[str]], existing: str) -> str:
     return options[pos]
 
 
-def _choose_provider(existing_provider: str) -> str:
-    section("① 模型提供商")
+def _pick_provider_list(provider_ids: list[str], existing: str, title: str) -> str:
+    print(f"  {c('bold', title)}")
+    for idx, pid in enumerate(provider_ids, 1):
+        provider = PROVIDERS[pid]
+        default_model = provider.get("default_model") or "-"
+        print(f"    [{c('green', str(idx))}] {c('bold', provider['name']):<24} {c('dim', default_model)}")
+    print()
+    default_idx = provider_ids.index(existing) + 1 if existing in provider_ids else 1
+    raw = ask(f"选择提供商 (1-{len(provider_ids)} 或 provider id)", str(default_idx))
+    if raw in provider_ids:
+        return raw
+    try:
+        pos = int(raw) - 1
+    except ValueError:
+        pos = default_idx - 1
+    if pos < 0 or pos >= len(provider_ids):
+        pos = default_idx - 1
+    return provider_ids[pos]
+
+
+def _choose_setup_mode(existing_provider: str) -> str:
+    section("① 配置模式")
+    print(f"  [1] {c('bold', '推荐')}  云端 API 快速开始")
+    print(f"  [2] {c('bold', '本地')}  Ollama / LM Studio / 自部署兼容 API")
+    print(f"  [3] {c('bold', '高级')}  完整提供商目录 + 细调\n")
+    default_mode = "2" if existing_provider in QUICK_LOCAL_PROVIDERS else "1"
+    mode = ask("配置模式", default_mode).strip().lower()
+    if mode in {"2", "local", "本地"}:
+        return "local"
+    if mode in {"3", "advanced", "高级"}:
+        return "advanced"
+    return "cloud"
+
+
+def _choose_provider(existing_provider: str, mode: str) -> str:
+    section("② 模型提供商")
     print(f"  {c('dim', 'KX 使用 litellm 风格 provider/model 配置。')}")
     print(f"  {c('dim', '支持 OpenAI、Claude、Gemini、DeepSeek、OpenRouter、国内大模型、Ollama、自定义兼容 API。')}\n")
-    provider_id = _pick_from_groups(MODEL_GROUPS, existing_provider)
+    if mode == "cloud":
+        provider_id = _pick_provider_list(QUICK_CLOUD_PROVIDERS, existing_provider, "常用云端提供商")
+    elif mode == "local":
+        provider_id = _pick_provider_list(QUICK_LOCAL_PROVIDERS, existing_provider, "本地 / 自部署提供商")
+    else:
+        provider_id = _pick_from_groups(MODEL_GROUPS, existing_provider)
     print(f"\n  {c('green', '✔')} 已选择: {c('bold', PROVIDERS[provider_id]['name'])}")
     return provider_id
 
@@ -157,7 +215,7 @@ def _choose_provider(existing_provider: str) -> str:
 def _choose_model(provider_id: str, existing_model: str) -> str:
     provider = PROVIDERS[provider_id]
     models = provider["models"]
-    section("② 模型名称")
+    section("③ 模型名称")
     if models:
         print(f"  {c('dim', '推荐模型:')}")
         for i, model in enumerate(models[:8], 1):
@@ -177,10 +235,12 @@ def _choose_model(provider_id: str, existing_model: str) -> str:
 
 def _collect_model_config(existing: dict[str, Any]) -> dict[str, Any]:
     model_existing = existing.get("model") or {}
-    provider_id = _choose_provider(str(model_existing.get("provider", "openai")))
+    existing_provider = str(model_existing.get("provider", "openai"))
+    mode = _choose_setup_mode(existing_provider)
+    provider_id = _choose_provider(existing_provider, mode)
     provider = PROVIDERS[provider_id]
     model_name = _choose_model(provider_id, str(model_existing.get("model", "")))
-    section("③ API 与 Endpoint")
+    section("④ API 与 Endpoint")
     env_key = provider.get("api_key_env")
     env_val = os.getenv(env_key, "") if env_key else ""
     existing_key = str(model_existing.get("api_key", ""))
@@ -194,7 +254,10 @@ def _collect_model_config(existing: dict[str, Any]) -> dict[str, Any]:
     if local_provider:
         print(f"  {c('dim', '该提供商通常不需要 API Key。')}")
     default_base = str(model_existing.get("base_url", provider.get("base_url") or "") or "")
-    base_url = ask("Base URL（留空使用官方默认）", default_base)
+    prompt = "Base URL（留空使用官方默认）"
+    if provider_id in {"vllm", "custom", "lmstudio", "ollama", "azure", "bedrock", "vertex"}:
+        prompt = "Base URL（建议确认）"
+    base_url = ask(prompt, default_base)
     temperature = ask("Temperature", str(model_existing.get("temperature", 0.2)))
     max_tokens = ask("Max tokens", str(model_existing.get("max_tokens", 2048)))
     try:
@@ -226,8 +289,8 @@ def _collect_model_config(existing: dict[str, Any]) -> dict[str, Any]:
 def _collect_workspace_config(existing: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     workspace_existing = existing.get("workspace") or {}
     memory_existing = existing.get("memory") or {}
-    section("④ 工作区与记忆")
-    root = ask("Workspace root", str(workspace_existing.get("root", ".")))
+    section("⑤ 工作区与记忆")
+    root = ask("Workspace root", str(workspace_existing.get("root", Path.cwd())))
     allow_raw = ask("Allow roots（逗号分隔）", ",".join(workspace_existing.get("allow_roots", [root or "."])))
     db_path = ask("SQLite db path", str(memory_existing.get("db_path", "~/.kx/kx.sqlite")))
     return (
@@ -239,7 +302,7 @@ def _collect_workspace_config(existing: dict[str, Any]) -> tuple[dict[str, Any],
 def _collect_gateway_config(existing: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     gateway_existing = existing.get("gateway") or {}
     delivery_existing = existing.get("delivery") or {}
-    section("⑤ Gateway 与 Delivery")
+    section("⑥ Gateway 与 Delivery")
     host = ask("Gateway host", str(gateway_existing.get("host", "127.0.0.1")))
     port = ask("Gateway port", str(gateway_existing.get("port", 8787)))
     title = ask("Gateway title", str(gateway_existing.get("title", "KX Agent Gateway")))
@@ -264,7 +327,7 @@ def _ask_platform_block(title: str, prompt_fn) -> None:
 
 
 def _collect_platform_delivery(existing: dict[str, Any], delivery_cfg: dict[str, Any]) -> dict[str, Any]:
-    section("⑥ 平台配置")
+    section("⑦ 平台配置")
     current_tokens = dict((existing.get("delivery") or {}).get("platform_tokens") or {})
     current_urls = dict((existing.get("delivery") or {}).get("platform_base_urls") or {})
     current_settings = dict((existing.get("delivery") or {}).get("platform_settings") or {})
@@ -273,9 +336,6 @@ def _collect_platform_delivery(existing: dict[str, Any], delivery_cfg: dict[str,
     settings = dict(current_settings)
 
     def block(name: str, fields: list[tuple[str, str, str, bool]]):
-        enabled = confirm(f"配置 {name}？", any(key in tokens or key in urls or key in settings for key, _, _, _ in fields))
-        if not enabled:
-            return
         entry = dict(settings.get(name.lower(), {}))
         for key, label, default_value, is_password in fields:
             if key.startswith("token") or key.startswith("key") or key.endswith("_token") or key.endswith("_secret"):
@@ -286,20 +346,30 @@ def _collect_platform_delivery(existing: dict[str, Any], delivery_cfg: dict[str,
                 entry[key] = ask(f"  {label}", str(entry.get(key, default_value)), password=is_password)
         settings[name.lower()] = entry
 
-    block("Telegram", [("telegram", "Bot Token", "", True), ("telegram_chat_id", "Chat ID", "", False)])
-    block("Slack", [("slack", "Bot Token", "", True), ("slack_webhook_url", "Webhook URL", "", False)])
-    block("Discord", [("discord", "Webhook Token/Path", "", True), ("discord_webhook_url", "Webhook URL", "", False)])
-    block("WhatsApp", [("whatsapp", "Access Token", "", True), ("whatsapp_phone_number_id", "Phone Number ID", "", False), ("whatsapp_url", "Base URL", "https://graph.facebook.com/v19.0", False)])
-    block("Feishu", [("feishu", "Tenant/User Token", "", True), ("feishu_url", "Base URL", "https://open.feishu.cn", False)])
-    block("WeCom", [("wecom", "Webhook URL", "", False), ("wecom_corp_id", "Corp ID", "", False), ("wecom_agent_id", "Agent ID", "", False)])
-    block("WeCom Callback", [("wecom_callback", "Callback URL", "", False), ("wecom_callback_token", "Token", "", True), ("wecom_callback_aes_key", "AES Key", "", True)])
-    block("Weixin", [("weixin", "Base URL", "", False), ("weixin_token", "Token", "", True), ("weixin_account_id", "Account ID", "", False)])
-    block("Matrix", [("matrix", "Token", "", True), ("matrix_url", "Homeserver URL", "", False)])
-    block("Signal", [("signal", "HTTP daemon URL", "http://127.0.0.1:8080", False)])
-    block("Email", [("smtp_host", "SMTP Host", "", False), ("smtp_port", "SMTP Port", "587", False), ("smtp_username", "SMTP Username", "", False), ("smtp_password", "SMTP Password", "", True), ("default_from_email", "From Email", "", False)])
-    block("SMS", [("twilio_account_sid", "Twilio Account SID", "", False), ("twilio_auth_token", "Twilio Auth Token", "", True), ("twilio_from_number", "Twilio From Number", "", False)])
-    block("QQBot", [("qqbot_app_id", "App ID", "", False), ("qqbot_token", "Token", "", True), ("qqbot_secret", "Secret", "", True)])
-    block("Yuanbao", [("yuanbao", "Gateway URL", "", False), ("yuanbao_token", "Token", "", True)])
+    defaults: list[str] = []
+    for platform_id, _, fields in PLATFORM_FIELDS:
+        if any(key in tokens or key in urls or key in settings.get(platform_id, {}) for key, _, _, _ in fields):
+            defaults.append(platform_id)
+    print(f"  {c('dim', '按需填写。留空会跳过，不再逐个平台轰炸式提问。')}")
+    for idx, (platform_id, label, _) in enumerate(PLATFORM_FIELDS, 1):
+        print(f"    [{c('green', str(idx))}] {label:<18} {c('dim', platform_id)}")
+    print()
+    default_value = ",".join(defaults)
+    raw = ask("要配置的平台（编号或 id，逗号分隔，留空跳过）", default_value)
+    selected: list[str] = []
+    for item in [part.strip().lower() for part in raw.split(",") if part.strip()]:
+        if item.isdigit():
+            pos = int(item) - 1
+            if 0 <= pos < len(PLATFORM_FIELDS):
+                selected.append(PLATFORM_FIELDS[pos][0])
+            continue
+        selected.append(item)
+    selected = [item for item in selected if item in {row[0] for row in PLATFORM_FIELDS}]
+    for platform_id, label, fields in PLATFORM_FIELDS:
+        if platform_id in selected:
+            print(f"  {c('bold', label)}")
+            block(label, fields)
+            print()
     delivery_cfg["platform_tokens"] = tokens
     delivery_cfg["platform_base_urls"] = urls
     delivery_cfg["platform_settings"] = settings
@@ -310,7 +380,7 @@ def _collect_misc(existing: dict[str, Any]) -> tuple[dict[str, Any], dict[str, A
     approval_existing = existing.get("approval") or {}
     channels_existing = existing.get("channels") or {}
     dashboard_existing = existing.get("dashboard") or {}
-    section("⑦ 运行策略")
+    section("⑧ 运行策略")
     approval_enabled = confirm("启用 approval gate？", bool(approval_existing.get("enabled", True)))
     dashboard_enabled = confirm("启用 dashboard？", bool(dashboard_existing.get("enabled", True)))
     dashboard_port = ask("Dashboard port", str(dashboard_existing.get("port", 8899)))
@@ -355,14 +425,25 @@ def run_setup_wizard(config_path: Path) -> dict[str, Any] | None:
         "sandbox": dict(existing.get("sandbox", {})),
         "routing": dict(existing.get("routing", {})),
     }
-    section("⑧ 确认并保存")
+    section("⑨ 确认并保存")
     print(f"  {c('bold', '模型')}: {PROVIDERS[model_cfg['provider']]['name']} / {model_cfg['model']}")
     if model_cfg.get("base_url"):
         print(f"  {c('bold', 'Base URL')}: {model_cfg['base_url']}")
     print(f"  {c('bold', 'Workspace')}: {workspace_cfg['root']}")
     print(f"  {c('bold', 'Gateway')}: http://{gateway_cfg['host']}:{gateway_cfg['port']}")
     print(f"  {c('bold', 'Delivery')}: {'enabled' if delivery_cfg['enabled'] else 'disabled'} / auto_send={'on' if delivery_cfg['auto_send'] else 'off'}")
+    configured_platforms: list[str] = []
+    token_map = delivery_cfg.get("platform_tokens", {})
+    url_map = delivery_cfg.get("platform_base_urls", {})
+    settings_map = delivery_cfg.get("platform_settings", {})
+    for platform_id, _, fields in PLATFORM_FIELDS:
+        if any(
+            token_map.get(key) or url_map.get(key) or settings_map.get(platform_id, {}).get(key)
+            for key, _, _, _ in fields
+        ):
+            configured_platforms.append(platform_id)
     print(f"  {c('bold', 'Adapters')}: {', '.join(channels_cfg['adapters'])}")
+    print(f"  {c('bold', '平台凭据')}: {', '.join(configured_platforms) if configured_platforms else '未配置'}")
     print()
     if not confirm("保存配置？", True):
         print(f"  {c('yellow', '已取消。')}")

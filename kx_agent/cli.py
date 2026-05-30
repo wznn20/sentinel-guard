@@ -73,6 +73,11 @@ sandbox:
   allow_shell_dangerous: true
   allowed_shell_prefixes:
     - "pwd"
+  profiles:
+    default:
+      allow_write: true
+      allow_shell: true
+      allow_dangerous: true
 """,
             encoding="utf-8",
         )
@@ -456,21 +461,30 @@ def serve(host, port):
 
 
 @cli.command()
-@click.option("--host", default="127.0.0.1")
-@click.option("--port", type=int, default=8787)
+@click.option("--host", default=None)
+@click.option("--port", type=int, default=None)
 def app(host, port):
     agent = _agent()
-    server = AppServer(agent, host=host, port=port)
-    click.echo(f"Serving unified KX app on http://{host}:{port}")
+    server = AppServer(
+        agent,
+        host=host or agent.config.gateway.host,
+        port=port or agent.config.gateway.port,
+    )
+    click.echo(f"Serving unified KX app on http://{server.host}:{server.port}")
     server.serve()
 
 
 @cli.command()
-@click.option("--host", default="127.0.0.1")
-@click.option("--port", type=int, default=8899)
+@click.option("--host", default=None)
+@click.option("--port", type=int, default=None)
 def dashboard(host, port):
-    server = DashboardServer(host=host, port=port)
-    click.echo(f"Serving dashboard on http://{host}:{port}")
+    agent = _agent()
+    server = DashboardServer(
+        agent,
+        host=host or agent.config.dashboard.host,
+        port=port or agent.config.dashboard.port,
+    )
+    click.echo(f"Serving dashboard on http://{server.host}:{server.port}")
     server.serve()
 
 
