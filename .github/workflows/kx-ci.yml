@@ -1,0 +1,33 @@
+name: KX CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install project and test deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Compile sources
+        run: python -m compileall kx_agent tests
+
+      - name: Run pytest
+        run: pytest -q
+
+      - name: Run CLI self-test
+        run: python -m kx_agent.cli self-test

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 from pathlib import Path
 from unittest.mock import patch
 from click.testing import CliRunner
@@ -1259,6 +1260,17 @@ def test_cli_dashboard_uses_agent_config_and_constructs_server():
     assert created["host"] == created["agent"].config.dashboard.host
     assert created["port"] == created["agent"].config.dashboard.port
     assert created["served"] is True
+
+
+def test_cli_status_json_outputs_machine_readable_payload():
+    runner = CliRunner()
+    result = runner.invoke(cli, ["status", "--json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["identity"] == "kx-agent"
+    assert "model" in payload
+    assert "gateway" in payload
+    assert "dashboard" in payload
 
 
 def test_agent_log_delivery_records_tool_run(tmp_path):

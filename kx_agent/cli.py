@@ -489,15 +489,36 @@ def dashboard(host, port):
 
 
 @cli.command()
-def status():
+@click.option("--json", "json_output", is_flag=True, help="Print machine-readable status as JSON.")
+def status(json_output):
     agent = _agent()
     session_count = len(agent.memory.search_sessions("", limit=9999))
-    click.echo(f"identity: {agent.config.identity}")
-    click.echo(f"model: {agent.config.model.provider}/{agent.config.model.model}")
-    click.echo(f"skills: {len(agent.skills.skills)}")
-    click.echo(f"sessions: {session_count}")
-    click.echo(f"workspace: {Path(agent.config.workspace.root).expanduser().resolve()}")
-    click.echo(f"shell: {agent.config.shell.executable}")
+    payload = {
+        "identity": agent.config.identity,
+        "model": f"{agent.config.model.provider}/{agent.config.model.model}",
+        "skills": len(agent.skills.skills),
+        "sessions": session_count,
+        "workspace": str(Path(agent.config.workspace.root).expanduser().resolve()),
+        "shell": agent.config.shell.executable,
+        "gateway": {
+            "host": agent.config.gateway.host,
+            "port": agent.config.gateway.port,
+        },
+        "dashboard": {
+            "enabled": agent.config.dashboard.enabled,
+            "host": agent.config.dashboard.host,
+            "port": agent.config.dashboard.port,
+        },
+    }
+    if json_output:
+        click.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    click.echo(f"identity: {payload['identity']}")
+    click.echo(f"model: {payload['model']}")
+    click.echo(f"skills: {payload['skills']}")
+    click.echo(f"sessions: {payload['sessions']}")
+    click.echo(f"workspace: {payload['workspace']}")
+    click.echo(f"shell: {payload['shell']}")
 
 
 @cli.command()

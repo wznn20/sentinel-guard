@@ -46,6 +46,20 @@ kx setup
 kx chat
 ```
 
+或直接用仓库自带脚本安装：
+
+```bash
+bash scripts/install_kx.sh
+```
+
+Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install_kx.ps1
+```
+
+环境变量模板见 `.env.example`。
+
 `kx setup` 现在是分层交互式配置向导，参考成熟 agent setup 体验，支持：
 
 - 推荐模式：云端 API 快速开始
@@ -70,6 +84,7 @@ kx setup --default
 
 - `kx chat` interactive agent loop
 - `kx self-test` run a local end-to-end toolchain self-check
+- `kx status --json` emit machine-readable runtime status
 - self-test now validates read/list/write/shell/delete on a temporary sandbox workspace
 - `kx serve` local JSON gateway
 - `kx skills` list loaded skills
@@ -129,10 +144,19 @@ kx setup --default
 
 ## Verification
 
-The environment did not have `pytest` installed, so verification was done with:
+本仓库现在提供统一验证入口：
+
+```bash
+python3 scripts/verify_kx.py
+```
+
+它会依次执行：
 
 - `python3 -m compileall kx_agent tests`
-- direct execution of the test functions in [tests/test_kx_agent.py](/root/hermes-security-agent/tests/test_kx_agent.py)
+- `python3 -m kx_agent.cli self-test`
+- `pytest -q`，若环境缺少 `pytest` 则退回内嵌测试 harness
+
+GitHub Actions 也会自动执行同样的核心校验。
 
 Covered paths:
 
