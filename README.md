@@ -41,7 +41,7 @@ The current runtime is intentionally local-first and simple. It is not yet a ful
 ## Quick Start
 
 ```bash
-pip install -e .
+pip install https://github.com/wznn20/sentinel-guard/releases/latest/download/kx_agent-latest-py3-none-any.whl
 kx setup
 kx chat
 ```
@@ -59,6 +59,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install_kx.ps1
 ```
 
 环境变量模板见 `.env.example`。
+
+`sentinel` CLI 仍然保留为兼容别名，但用户面品牌已统一为 `KX Agent` / `kx`。
 
 `kx setup` 现在是分层交互式配置向导，参考成熟 agent setup 体验，支持：
 
@@ -120,6 +122,7 @@ kx setup --default
 - `kx tool list|run|history` inspect and run tools
 - `kx mcp` expose MCP tools over stdio
 - `kx upgrate` or `kx upgrade` update the local KX Agent repo and reinstall it
+  packaged installs now upgrade from the latest GitHub release wheel automatically
 
 ## Current Architecture
 
@@ -157,6 +160,16 @@ python3 scripts/verify_kx.py
 - `pytest -q`，若环境缺少 `pytest` 则退回内嵌测试 harness
 
 GitHub Actions 也会自动执行同样的核心校验。
+
+## Release
+
+- CI workflow: `.github/workflows/kx-ci.yml`
+- release workflow: `.github/workflows/release.yml`
+- latest stable wheel install URL:
+
+```bash
+pip install --upgrade https://github.com/wznn20/sentinel-guard/releases/latest/download/kx_agent-latest-py3-none-any.whl
+```
 
 Covered paths:
 

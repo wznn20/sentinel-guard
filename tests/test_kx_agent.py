@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
+import runpy
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -14,6 +16,7 @@ from kx_agent.agent import KXAgent
 from kx_agent.channels import ChannelEvent, ChannelHub
 from kx_agent.app_server import AppServer
 from kx_agent.dashboard import DashboardServer
+from kx_agent.dashboard import _load_asset
 from kx_agent.delivery import DeliveryResult, DeliveryService
 from kx_agent.config import KXConfig
 from kx_agent.setup_wizard import run_setup_wizard
@@ -1005,6 +1008,15 @@ approval:
     assert "tree" in detail and "tool_runs" in detail and "tasks" in detail
 
 
+def test_dashboard_assets_load_from_package():
+    html = _load_asset("index.html").decode("utf-8")
+    css = _load_asset("dashboard.css").decode("utf-8")
+    js = _load_asset("dashboard.js").decode("utf-8")
+    assert "KX Control Room" in html
+    assert "--accent" in css
+    assert "refreshOverview" in js
+
+
 def test_app_server_overview_returns_live_state(tmp_path):
     config_path = _write_config(
         tmp_path / "config.yaml",
@@ -1271,7 +1283,11 @@ def test_cli_upgrate_falls_back_to_pip_when_not_in_git_repo():
         ]
         for cmd in calls
     )
-    assert any("git+https://github.com/wznn20/sentinel-guard.git@main" in " ".join(cmd) for cmd in calls)
+    assert any(
+        "https://github.com/wznn20/sentinel-guard/releases/latest/download/kx_agent-latest-py3-none-any.whl"
+        in " ".join(cmd)
+        for cmd in calls
+    )
 
 
 def test_cli_dashboard_uses_agent_config_and_constructs_server():
@@ -1307,6 +1323,22 @@ def test_cli_status_json_outputs_machine_readable_payload():
     assert "model" in payload
     assert "gateway" in payload
     assert "dashboard" in payload
+
+
+def test_release_manifest_script_writes_latest_release_commands(tmp_path):
+    script = Path("/root/hermes-security-agent/scripts/release_manifest.py")
+    cwd = Path.cwd()
+    argv = list(sys.argv)
+    try:
+        os.chdir(tmp_path)
+        sys.argv = [str(script), "v0.3.0"]
+        runpy.run_path(str(script), run_name="__main__")
+        payload = json.loads((tmp_path / "release-manifest.json").read_text(encoding="utf-8"))
+    finally:
+        sys.argv = argv
+        os.chdir(cwd)
+    assert payload["tag"] == "v0.3.0"
+    assert "releases/latest/download/kx_agent-latest-py3-none-any.whl" in payload["install"]["pip_latest"]
 
 
 def test_agent_log_delivery_records_tool_run(tmp_path):

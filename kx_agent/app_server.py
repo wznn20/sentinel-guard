@@ -5,7 +5,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from .channels import ChannelHub
-from .dashboard import HTML
+from .dashboard import ASSET_TYPES, _load_asset
 
 
 class AppServer:
@@ -123,9 +123,25 @@ class AppServer:
                 query = parse_qs(parsed.query)
 
                 if path == "/":
-                    body = HTML.encode("utf-8")
+                    body = _load_asset("index.html")
                     self.send_response(200)
                     self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                if path == "/assets/dashboard.css":
+                    body = _load_asset("dashboard.css")
+                    self.send_response(200)
+                    self.send_header("Content-Type", ASSET_TYPES["dashboard.css"])
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                if path == "/assets/dashboard.js":
+                    body = _load_asset("dashboard.js")
+                    self.send_response(200)
+                    self.send_header("Content-Type", ASSET_TYPES["dashboard.js"])
                     self.send_header("Content-Length", str(len(body)))
                     self.end_headers()
                     self.wfile.write(body)

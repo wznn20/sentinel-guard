@@ -21,6 +21,10 @@ from .setup_wizard import run_setup_wizard
 HOME = Path.home() / ".kx"
 CONFIG_FILE = HOME / "config.yaml"
 DEFAULT_UPGRADE_REPO = "https://github.com/wznn20/sentinel-guard.git"
+DEFAULT_RELEASE_WHEEL_URL = (
+    "https://github.com/wznn20/sentinel-guard/releases/latest/download/"
+    "kx_agent-latest-py3-none-any.whl"
+)
 
 
 def _agent() -> KXAgent:
@@ -125,7 +129,7 @@ def upgrate(branch):
             text=True,
         )
     else:
-        source = f"git+{DEFAULT_UPGRADE_REPO}@{branch}"
+        source = DEFAULT_RELEASE_WHEEL_URL if branch == "main" else f"git+{DEFAULT_UPGRADE_REPO}@{branch}"
         click.echo(f"Updating KX Agent from packaged install via {source}")
         install = subprocess.run(
             [python, "-m", "pip", "install", "--upgrade", source],

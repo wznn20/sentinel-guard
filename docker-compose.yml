@@ -1,13 +1,13 @@
 # ============================================================
-# Sentinel — Docker Compose 快速部署
+# KX Agent — Docker Compose 快速部署
 # ============================================================
 
 version: "3.8"
 
 services:
-  sentinel:
-    image: nousresearch/sentinel:latest
-    container_name: sentinel
+  kx-agent:
+    image: ghcr.io/wznn20/sentinel-guard:latest
+    container_name: kx-agent
     restart: unless-stopped
 
     # 网络模式:
@@ -16,23 +16,13 @@ services:
     network_mode: host
 
     volumes:
-      # 配置文件
-      - ~/.sentinel/config:/home/sentinel/.sentinel/config
-      # 证据存储
-      - ~/.sentinel/evidence:/home/sentinel/.sentinel/evidence
-      # 日志目录 (可选)
-      - ~/.sentinel/logs:/home/sentinel/.sentinel/logs
-      # 只读访问系统日志 (日志分析)
-      - /var/log:/var/log:ro
+      - ~/.kx:/home/kx/.kx
 
     environment:
-      # LLM API Key
-      - SENTINEL_LLM_KEY=${SENTINEL_LLM_KEY}
-      # 可选: 威胁情报 API Key
-      - ABUSEIPDB_KEY=${ABUSEIPDB_KEY:-}
-      - VIRUSTOTAL_KEY=${VIRUSTOTAL_KEY:-}
-      # 环境
-      - TZ=Asia/Shanghai
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - TZ=UTC
 
     # 资源限制
     deploy:
@@ -44,7 +34,7 @@ services:
 
     # 健康检查
     healthcheck:
-      test: ["CMD", "sentinel", "status", "--json"]
+      test: ["CMD", "kx", "status", "--json"]
       interval: 30s
       timeout: 5s
       retries: 3

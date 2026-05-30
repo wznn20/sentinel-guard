@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KX Control Room</title>
+  <link rel="stylesheet" href="/assets/dashboard.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow">KX Agent</div>
+        <h1>Control room for local-first orchestration</h1>
+        <p class="hero-text">
+          Observe sessions, approvals, task delegation, and tool activity from one place.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <button class="secondary" id="refreshButton" type="button">Refresh</button>
+        <button id="aggregateButton" type="button">Aggregate Next</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel panel-command">
+        <div class="panel-head">
+          <h2>Operator Console</h2>
+          <span class="panel-meta" id="identityLabel">Loading…</span>
+        </div>
+        <div class="toolbar">
+          <input id="goalInput" placeholder="Plan a goal, release, incident, or project" type="text">
+          <button id="planButton" type="button">Plan Goal</button>
+        </div>
+        <div class="toolbar">
+          <select id="sessionSelect">
+            <option value="">Select session…</option>
+          </select>
+          <input id="chatInput" placeholder="Send a message into the selected session" type="text">
+          <button id="sendButton" type="button">Send</button>
+        </div>
+      </section>
+
+      <section class="metrics" id="metricGrid">
+        <article class="metric-card">
+          <div class="metric-label">Sessions</div>
+          <div class="metric-value">-</div>
+        </article>
+        <article class="metric-card">
+          <div class="metric-label">Tasks</div>
+          <div class="metric-value">-</div>
+        </article>
+        <article class="metric-card">
+          <div class="metric-label">Approvals</div>
+          <div class="metric-value">-</div>
+        </article>
+        <article class="metric-card">
+          <div class="metric-label">Adapters</div>
+          <div class="metric-value">-</div>
+        </article>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Recent Sessions</h2>
+            <span class="panel-meta">Stable routing and memory state</span>
+          </div>
+          <div id="sessionsTable" class="table-wrap"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Recent Tasks</h2>
+            <span class="panel-meta">Planner, worker, aggregation flow</span>
+          </div>
+          <div id="tasksTable" class="table-wrap"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Pending Approvals</h2>
+            <span class="panel-meta">Human-in-the-loop gates</span>
+          </div>
+          <div id="approvalsTable" class="table-wrap"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Delegations</h2>
+            <span class="panel-meta">Sub-agent execution queue</span>
+          </div>
+          <div id="delegationsTable" class="table-wrap"></div>
+        </article>
+
+        <article class="panel panel-wide">
+          <div class="panel-head">
+            <h2>Session Timeline</h2>
+            <span class="panel-meta">Live transcript and channel metadata</span>
+          </div>
+          <div id="sessionTimeline" class="timeline empty">Select a session.</div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Session Memory</h2>
+            <span class="panel-meta">Summary tree and long-term context</span>
+          </div>
+          <pre id="sessionTree" class="code-block">Select a session.</pre>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Tool Runs</h2>
+            <span class="panel-meta">Audited local execution</span>
+          </div>
+          <pre id="sessionTools" class="code-block">Select a session.</pre>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Session Tasks</h2>
+            <span class="panel-meta">Scope owned by the current session</span>
+          </div>
+          <pre id="sessionTasks" class="code-block">Select a session.</pre>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Sandbox Profiles</h2>
+            <span class="panel-meta">Policy envelopes and file roots</span>
+          </div>
+          <pre id="sandboxBlock" class="code-block">Loading…</pre>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <script src="/assets/dashboard.js"></script>
+</body>
+</html>

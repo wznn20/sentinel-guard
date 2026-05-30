@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kx-agent"
-version = "0.2.0"
-description = "KX Agent — a gateway + memory + human loop agent"
+version = "0.3.0"
+description = "KX Agent — local-first orchestration with memory, approvals, and operator control"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
@@ -55,6 +55,19 @@ target-version = "py311"
 
 [tool.hatch.build.targets.wheel]
 packages = ["kx_agent", "sentinel_core", "sentinel_security", "sentinel_cli", "sentinel_dashboard", "sentinel_plugins"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"kx_agent/dashboard_assets" = "kx_agent/dashboard_assets"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/kx_agent",
+    "/tests",
+    "/scripts",
+    "/README.md",
+    "/pyproject.toml",
+    "/.env.example",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
