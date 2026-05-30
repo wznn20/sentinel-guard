@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import sys
 from pathlib import Path
 from unittest.mock import patch
 from click.testing import CliRunner
@@ -1236,6 +1237,41 @@ def test_cli_upgrate_invokes_git_pull_and_pip_install():
     assert result.exit_code == 0
     assert any(cmd[:3] == ["git", "-C", "/root/hermes-security-agent"] for cmd in calls)
     assert any("pip" in " ".join(cmd) for cmd in calls)
+
+
+def test_cli_upgrate_falls_back_to_pip_when_not_in_git_repo():
+    runner = CliRunner()
+
+    class Proc:
+        def __init__(self):
+            self.returncode = 0
+            self.stdout = "ok"
+            self.stderr = ""
+
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return Proc()
+
+    with patch("kx_agent.cli._discover_repo_root", return_value=None), patch(
+        "kx_agent.cli.subprocess.run", side_effect=fake_run
+    ):
+        result = runner.invoke(cli, ["upgrate"])
+
+    assert result.exit_code == 0
+    assert not any(cmd and cmd[0] == "git" for cmd in calls)
+    assert any(
+        cmd[:5] == [
+            sys.executable or "python3",
+            "-m",
+            "pip",
+            "install",
+            "--upgrade",
+        ]
+        for cmd in calls
+    )
+    assert any("git+https://github.com/wznn20/sentinel-guard.git@main" in " ".join(cmd) for cmd in calls)
 
 
 def test_cli_dashboard_uses_agent_config_and_constructs_server():

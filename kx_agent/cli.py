@@ -20,10 +20,18 @@ from .setup_wizard import run_setup_wizard
 
 HOME = Path.home() / ".kx"
 CONFIG_FILE = HOME / "config.yaml"
+DEFAULT_UPGRADE_REPO = "https://github.com/wznn20/sentinel-guard.git"
 
 
 def _agent() -> KXAgent:
     return KXAgent(CONFIG_FILE if CONFIG_FILE.exists() else None)
+
+
+def _discover_repo_root(start: Path) -> Path | None:
+    for candidate in [start, *start.parents]:
+        if (candidate / ".git").exists() and (candidate / "pyproject.toml").exists():
+            return candidate
+    return None
 
 
 @click.group()
@@ -98,13 +106,32 @@ sandbox:
 @cli.command("upgrate")
 @click.option("--branch", default="main")
 def upgrate(branch):
-    repo_root = Path(__file__).resolve().parents[1]
-    click.echo(f"Updating KX Agent from {repo_root} ({branch})")
-    pull = subprocess.run(["git", "-C", str(repo_root), "pull", "origin", branch], capture_output=True, text=True)
-    if pull.returncode != 0:
-        raise click.ClickException(pull.stderr.strip() or pull.stdout.strip() or "git pull failed")
     python = sys.executable or "python3"
-    install = subprocess.run([python, "-m", "pip", "install", "."], cwd=str(repo_root), capture_output=True, text=True)
+    module_dir = Path(__file__).resolve().parent
+    repo_root = _discover_repo_root(module_dir)
+    if repo_root is not None:
+        click.echo(f"Updating KX Agent from git repo {repo_root} ({branch})")
+        pull = subprocess.run(
+            ["git", "-C", str(repo_root), "pull", "origin", branch],
+            capture_output=True,
+            text=True,
+        )
+        if pull.returncode != 0:
+            raise click.ClickException(pull.stderr.strip() or pull.stdout.strip() or "git pull failed")
+        install = subprocess.run(
+            [python, "-m", "pip", "install", "."],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+        )
+    else:
+        source = f"git+{DEFAULT_UPGRADE_REPO}@{branch}"
+        click.echo(f"Updating KX Agent from packaged install via {source}")
+        install = subprocess.run(
+            [python, "-m", "pip", "install", "--upgrade", source],
+            capture_output=True,
+            text=True,
+        )
     if install.returncode != 0:
         raise click.ClickException(install.stderr.strip() or install.stdout.strip() or "pip install failed")
     click.echo("KX Agent updated successfully.")
